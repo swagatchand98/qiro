@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+body {
+  font-family: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Minimal black & white theme */
+.section-number {
+  @apply bg-black text-white rounded w-8 h-8 flex items-center justify-center text-sm font-bold;
+}
+
+.btn-primary {
+  @apply bg-black hover:bg-gray-800 text-white font-medium px-6 py-2.5 rounded transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-white hover:bg-gray-50 text-black font-medium px-6 py-2.5 rounded border border-gray-300 transition-colors;
+}
+
+.input-field {
+  @apply w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-all;
+}
+
+.card {
+  @apply bg-white rounded-lg border border-gray-200 p-6;
+}

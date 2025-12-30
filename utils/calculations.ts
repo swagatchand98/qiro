@@ -119,10 +119,12 @@ export const calculateDoorCosts = (
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
   const glassCost = glassAreaWithWastage * (glassType?.pricePerSqFt || 0) * door.quantity;
   
-  // Connector cost (4 connectors per door minimum)
-  const connectorsPerDoor = 4;
-  const connector = masterData.connectorTypes[0]; // Default connector
-  const connectorCost = connectorsPerDoor * connector.pricePerUnit * door.quantity;
+  // Connector cost
+  let connectorCost = 0;
+  if (door.connectorCode && door.connectorQuantity) {
+    const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
+    connectorCost = door.connectorQuantity * (connector?.pricePerUnit || 0) * door.quantity;
+  }
   
   const totalCost = frameCost + handleCost + glassCost + connectorCost;
   
@@ -218,11 +220,18 @@ export const calculateCostSummary = (
 
 // Format currency
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 2,
-  }).format(amount);
+  // Use consistent formatting to avoid hydration errors
+  const formatted = amount.toFixed(2);
+  const [integerPart, decimalPart] = formatted.split('.');
+  
+  // Add Indian-style comma separators
+  const lastThree = integerPart.substring(integerPart.length - 3);
+  const otherNumbers = integerPart.substring(0, integerPart.length - 3);
+  const formattedInteger = otherNumbers !== '' 
+    ? otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + lastThree
+    : lastThree;
+  
+  return `₹${formattedInteger}.${decimalPart}`;
 };
 
 // Format date

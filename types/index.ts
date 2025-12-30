@@ -21,12 +21,14 @@ export interface GlassType {
   name: string;
   pricePerSqFt: number;
   thickness?: number; // mm
+  imageUrl?: string;
 }
 
 export interface ConnectorType {
   code: string;
   name: string;
   pricePerUnit: number;
+  imageUrl?: string;
 }
 
 export type MeasurementUnit = 'mm' | 'inches';
@@ -51,6 +53,9 @@ export interface DoorConfiguration {
   frameProfileCode: string;
   handleProfileCode?: string;
   glassTypeCode: string;
+  connectorCode?: string;
+  connectorQuantity: number;
+  liftAvailable: boolean;
   referenceImage?: string;
 }
 

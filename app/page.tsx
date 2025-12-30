@@ -14,6 +14,7 @@ import { masterData as defaultMasterData } from '../data/masterData';
 import {
   calculateDoorCosts,
   calculateCostSummary,
+  calculateCuttingScheme,
   formatCurrency,
 } from '../utils/calculations';
 import { DoorDiagram } from '../utils/diagramGenerator';
@@ -25,6 +26,7 @@ export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'defaults'>('frames');
+  const [showReport, setShowReport] = useState(false);
   
   // Editable master data
   const [masterData, setMasterData] = useState<MasterData>(() => {
@@ -79,6 +81,9 @@ export default function Home() {
     carcassThickness: 18,
     frameProfileCode: masterData.frameProfiles[0].code,
     glassTypeCode: masterData.glassTypes[0].code,
+    connectorCode: masterData.connectorTypes[0]?.code,
+    connectorQuantity: 4,
+    liftAvailable: true,
   });
 
   // Calculate door costs
@@ -127,6 +132,9 @@ export default function Home() {
       carcassThickness: 18,
       frameProfileCode: masterData.frameProfiles[0].code,
       glassTypeCode: masterData.glassTypes[0].code,
+      connectorCode: masterData.connectorTypes[0]?.code,
+      connectorQuantity: 4,
+      liftAvailable: true,
     });
   };
 
@@ -435,14 +443,43 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="flex items-end">
-                              <button
-                                onClick={() => deleteFrameProfile(index)}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
-                              >
-                                Delete
-                              </button>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      updateFrameProfile(index, { ...profile, imageUrl: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-black file:text-white hover:file:bg-gray-800"
+                              />
+                              {profile.imageUrl && (
+                                <div className="mt-2 relative">
+                                  <img src={profile.imageUrl} alt={profile.name} className="w-16 h-16 object-cover rounded border" />
+                                  <button
+                                    onClick={() => updateFrameProfile(index, { ...profile, imageUrl: undefined })}
+                                    className="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
                             </div>
+                          </div>
+                          <div className="mt-3">
+                            <button
+                              onClick={() => deleteFrameProfile(index)}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -493,14 +530,43 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="md:col-span-3">
-                              <button
-                                onClick={() => deleteHandleProfile(index)}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
-                              >
-                                Delete
-                              </button>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      updateHandleProfile(index, { ...profile, imageUrl: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-black file:text-white hover:file:bg-gray-800"
+                              />
+                              {profile.imageUrl && (
+                                <div className="mt-2 relative">
+                                  <img src={profile.imageUrl} alt={profile.name} className="w-16 h-16 object-cover rounded border" />
+                                  <button
+                                    onClick={() => updateHandleProfile(index, { ...profile, imageUrl: undefined })}
+                                    className="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
                             </div>
+                          </div>
+                          <div className="mt-3">
+                            <button
+                              onClick={() => deleteHandleProfile(index)}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -560,14 +626,43 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="md:col-span-2">
-                              <button
-                                onClick={() => deleteGlassType(index)}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
-                              >
-                                Delete
-                              </button>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      updateGlassType(index, { ...glass, imageUrl: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-black file:text-white hover:file:bg-gray-800"
+                              />
+                              {glass.imageUrl && (
+                                <div className="mt-2 relative">
+                                  <img src={glass.imageUrl} alt={glass.name} className="w-16 h-16 object-cover rounded border" />
+                                  <button
+                                    onClick={() => updateGlassType(index, { ...glass, imageUrl: undefined })}
+                                    className="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
                             </div>
+                          </div>
+                          <div className="mt-3">
+                            <button
+                              onClick={() => deleteGlassType(index)}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -618,14 +713,43 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
-                            <div className="md:col-span-3">
-                              <button
-                                onClick={() => deleteConnectorType(index)}
-                                className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
-                              >
-                                Delete
-                              </button>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      updateConnectorType(index, { ...connector, imageUrl: reader.result as string });
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                className="w-full text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-black file:text-white hover:file:bg-gray-800"
+                              />
+                              {connector.imageUrl && (
+                                <div className="mt-2 relative">
+                                  <img src={connector.imageUrl} alt={connector.name} className="w-16 h-16 object-cover rounded border" />
+                                  <button
+                                    onClick={() => updateConnectorType(index, { ...connector, imageUrl: undefined })}
+                                    className="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 flex items-center justify-center text-xs"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
                             </div>
+                          </div>
+                          <div className="mt-3">
+                            <button
+                              onClick={() => deleteConnectorType(index)}
+                              className="w-full bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold text-sm"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -764,62 +888,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Configuration Settings */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
-          <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">2</span>
-            Configuration
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                GST %
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={quotation.gstPercentage}
-                onChange={e => setQuotation(prev => ({ ...prev, gstPercentage: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Glass Wastage %
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={quotation.glassWastagePercentage}
-                onChange={e => setQuotation(prev => ({ ...prev, glassWastagePercentage: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Global Discount %
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={quotation.globalDiscount}
-                onChange={e => setQuotation(prev => ({ ...prev, globalDiscount: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              />
-            </div>
-          </div>
-        </section>
-
         {/* Door Configuration Module */}
         <section className="border border-gray-200 rounded-lg p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">3</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">2</span>
             Add Door Configuration
           </h2>
           
@@ -1023,16 +1095,132 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Door Image Upload */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-black transition-colors">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Door Image (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setCurrentDoor(prev => ({ ...prev, referenceImage: reader.result as string }));
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800"
+                />
+                {currentDoor.referenceImage && (
+                  <div className="mt-3 relative">
+                    <img 
+                      src={currentDoor.referenceImage} 
+                      alt="Door preview" 
+                      className="w-full h-32 object-cover rounded border border-gray-300"
+                    />
+                    <button
+                      onClick={() => setCurrentDoor(prev => ({ ...prev, referenceImage: undefined }))}
+                      className="absolute top-1 right-1 bg-black text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-800"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={handleAddDoor}
                 className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded transition-colors"
               >
                 + Add Door
               </button>
+
+              {/* Calculated Preview Fields */}
+              {currentDoor.width > 0 && currentDoor.height > 0 && (
+                <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Frame Qty (m)
+                    </label>
+                    <input
+                      type="text"
+                      value={(calculateCuttingScheme(currentDoor).totalFrameLength / 1000).toFixed(2)}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Handle Qty (m)
+                    </label>
+                    <input
+                      type="text"
+                      value={(calculateCuttingScheme(currentDoor).totalHandleLength / 1000).toFixed(2)}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Glass (S.ft)
+                    </label>
+                    <input
+                      type="text"
+                      value={(() => {
+                        const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                        return calc.glassAreaWithWastage.toFixed(2);
+                      })()}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Glass Cost
+                    </label>
+                    <input
+                      type="text"
+                      value={formatCurrency(calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).glassCost)}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Hardware Cost
+                    </label>
+                    <input
+                      type="text"
+                      value={formatCurrency(
+                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).frameCost +
+                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).handleCost +
+                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).connectorCost
+                      )}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Final Cost
+                    </label>
+                    <input
+                      type="text"
+                      value={formatCurrency(calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).totalCost * currentDoor.quantity)}
+                      readOnly
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700 font-semibold"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Door Preview Diagram */}
-            <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center">
+            <div className="bg-gray-50 rounded-lg p-4 flex items-start justify-center">
               {currentDoor.width > 0 && currentDoor.height > 0 ? (
                 <DoorDiagram door={currentDoor} width={350} height={500} />
               ) : (
@@ -1064,6 +1252,13 @@ export default function Home() {
                           ✕
                         </button>
                       </div>
+                      {door.referenceImage && (
+                        <img 
+                          src={door.referenceImage} 
+                          alt={door.doorName}
+                          className="w-full h-32 object-cover rounded border border-gray-200 mb-2"
+                        />
+                      )}
                       <p className="text-sm text-gray-600">
                         {door.doorType} | {door.width}×{door.height} {door.measurementUnit}
                       </p>
@@ -1081,71 +1276,74 @@ export default function Home() {
           )}
         </section>
 
-        {/* Cutting Schemes Display */}
-        {quotation.doors.length > 0 && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
-            <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">4</span>
-              Cutting Schemes
-            </h2>
-            <div className="space-y-6">
-              {quotation.doors.map((door, index) => {
-                const calc = doorCalculations[index];
-                if (!calc) return null;
-                
-                return (
-                  <div key={door.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                    <h3 className="font-semibold text-lg text-black mb-3">{door.doorName}</h3>
-                    
-                    {/* Frame Profile Info */}
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600 mb-1">
-                        Frame Profile: {masterData.frameProfiles.find(f => f.code === door.frameProfileCode)?.name || 'N/A'}
-                      </p>
-                      <p className="text-sm font-semibold text-gray-800">Cutting Scheme Frame - {door.quantity}X</p>
-                    </div>
-                    
-                    {/* Visual Cutting Scheme */}
-                    <div className="mb-4">
-                      <div className="flex items-center gap-1 mb-2">
-                        {[...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces].map((length, idx) => {
-                          const maxLength = Math.max(...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces);
-                          const widthPercent = (length / maxLength) * 100;
-                          
-                          return (
-                            <div
-                              key={idx}
-                              className="bg-gradient-to-r from-amber-700 to-amber-600 text-white text-center py-3 rounded flex items-center justify-center font-semibold text-sm border-2 border-amber-800"
-                              style={{ width: `${Math.max(widthPercent, 15)}%` }}
-                            >
-                              {length}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-gray-500">Total Frame Length: {calc.cuttingScheme.totalFrameLength} mm</p>
-                    </div>
-                    
-                    {/* Handle Profile Info */}
-                    {door.handleProfileCode && (
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Handle Profile: {masterData.handleProfiles.find(h => h.code === door.handleProfileCode)?.name || 'N/A'}
-                        </p>
-                        <p className="text-sm font-semibold text-gray-800">Cutting Scheme Handle - {calc.cuttingScheme.handlePieces.length > 0 ? calc.cuttingScheme.totalHandleLength : 0}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Connectors & Lift Configuration */}
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h2 className="text-lg font-bold text-black mb-6 flex items-center">
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">3</span>
+            Connectors & Lift Configuration
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Connectors *
+              </label>
+              <select
+                value={currentDoor.connectorCode || ''}
+                onChange={e => setCurrentDoor(prev => ({ ...prev, connectorCode: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              >
+                {masterData.connectorTypes.map(connector => (
+                  <option key={connector.code} value={connector.code}>
+                    {connector.name} - ₹{connector.pricePerUnit}/unit
+                  </option>
+                ))}
+              </select>
             </div>
-          </section>
-        )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Connectors Qty (nos) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={currentDoor.connectorQuantity}
+                onChange={e => setCurrentDoor(prev => ({ ...prev, connectorQuantity: parseInt(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lift Available
+              </label>
+              <div className="flex items-center space-x-6">
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={currentDoor.liftAvailable === true}
+                    onChange={() => setCurrentDoor(prev => ({ ...prev, liftAvailable: true }))}
+                    className="mr-2 w-4 h-4 text-black focus:ring-black"
+                  />
+                  <span className="text-sm">Yes</span>
+                </label>
+                <label className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={currentDoor.liftAvailable === false}
+                    onChange={() => setCurrentDoor(prev => ({ ...prev, liftAvailable: false }))}
+                    className="mr-2 w-4 h-4 text-black focus:ring-black"
+                  />
+                  <span className="text-sm">No</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Additional Components Section */}
         <section className="border border-gray-200 rounded-lg p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">5</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">4</span>
             Additional Components
           </h2>
           
@@ -1243,7 +1441,7 @@ export default function Home() {
         {/* Optional Items Section */}
         <section className="border border-gray-200 rounded-lg p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">5</span>
             Optional Items
           </h2>
           
@@ -1338,11 +1536,124 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Cost Summary */}
-        {quotation.doors.length > 0 && (
+        {/* Configuration Settings */}
+        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <h2 className="text-lg font-bold text-black mb-6 flex items-center">
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
+            Configuration
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                GST %
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={quotation.gstPercentage}
+                onChange={e => setQuotation(prev => ({ ...prev, gstPercentage: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Glass Wastage %
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={quotation.glassWastagePercentage}
+                onChange={e => setQuotation(prev => ({ ...prev, glassWastagePercentage: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Global Discount %
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={quotation.globalDiscount}
+                onChange={e => setQuotation(prev => ({ ...prev, globalDiscount: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Cutting Schemes Display */}
+        {showReport && quotation.doors.length > 0 && (
           <section className="border border-gray-200 rounded-lg p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
               <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">7</span>
+              Cutting Schemes
+            </h2>
+            <div className="space-y-6">
+              {quotation.doors.map((door, index) => {
+                const calc = doorCalculations[index];
+                if (!calc) return null;
+                
+                return (
+                  <div key={door.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <h3 className="font-semibold text-lg text-black mb-3">{door.doorName}</h3>
+                    
+                    {/* Frame Profile Info */}
+                    <div className="mb-3">
+                      <p className="text-sm text-gray-600 mb-1">
+                        Frame Profile: {masterData.frameProfiles.find(f => f.code === door.frameProfileCode)?.name || 'N/A'}
+                      </p>
+                      <p className="text-sm font-semibold text-gray-800">Cutting Scheme Frame - {door.quantity}X</p>
+                    </div>
+                    
+                    {/* Visual Cutting Scheme */}
+                    <div className="mb-4">
+                      <div className="flex items-center gap-1 mb-2">
+                        {[...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces].map((length, idx) => {
+                          const maxLength = Math.max(...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces);
+                          const widthPercent = (length / maxLength) * 100;
+                          
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-gradient-to-r from-amber-700 to-amber-600 text-white text-center py-3 rounded flex items-center justify-center font-semibold text-sm border-2 border-amber-800"
+                              style={{ width: `${Math.max(widthPercent, 15)}%` }}
+                            >
+                              {length}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-gray-500">Total Frame Length: {calc.cuttingScheme.totalFrameLength} mm</p>
+                    </div>
+                    
+                    {/* Handle Profile Info */}
+                    {door.handleProfileCode && (
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-600 mb-1">
+                          Handle Profile: {masterData.handleProfiles.find(h => h.code === door.handleProfileCode)?.name || 'N/A'}
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800">Cutting Scheme Handle - {calc.cuttingScheme.handlePieces.length > 0 ? calc.cuttingScheme.totalHandleLength : 0}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Cost Summary */}
+        {showReport && quotation.doors.length > 0 && (
+          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+            <h2 className="text-lg font-bold text-black mb-6 flex items-center">
+              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">8</span>
               Cost Summary
             </h2>
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-300">
@@ -1398,10 +1709,10 @@ export default function Home() {
         )}
 
         {/* Export Buttons */}
-        {quotation.doors.length > 0 && (
+        {showReport && quotation.doors.length > 0 && (
           <section className="border border-gray-200 rounded-lg p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">8</span>
+              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">9</span>
               Export Options
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1431,6 +1742,42 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Export Text
+              </button>
+            </div>
+          </section>
+        )}
+        {/* Generate Report Button */}
+        {quotation.doors.length > 0 && !showReport && (
+          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <h2 className="text-lg font-bold text-black">Ready to Generate Report?</h2>
+              <p className="text-sm text-gray-600 text-center">Click the button below to generate cutting schemes, cost summary, and export options</p>
+              <button
+                onClick={() => setShowReport(true)}
+                className="bg-black hover:bg-gray-800 text-white font-bold py-4 px-8 rounded-lg transition-colors flex items-center shadow-lg hover:shadow-xl"
+              >
+                <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Generate Report
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Regenerate Report Button - Shows when report is visible */}
+        {showReport && quotation.doors.length > 0 && (
+          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <p className="text-sm text-gray-600 text-center">Made changes? Click below to hide and regenerate the report</p>
+              <button
+                onClick={() => setShowReport(false)}
+                className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Hide Report
               </button>
             </div>
           </section>

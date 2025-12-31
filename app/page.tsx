@@ -20,13 +20,19 @@ import {
 import { DoorDiagram } from '../utils/diagramGenerator';
 import { generateQuotationPDF } from '../utils/pdfGenerator';
 import { exportToExcel, exportToText, saveQuotationToLocalStorage } from '../utils/exportUtils';
-import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType } from '../types';
+import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, ProductType, DoorTypeCompatibility } from '../types';
 
 export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'defaults'>('frames');
+  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'products' | 'defaults'>('frames');
   const [showReport, setShowReport] = useState(false);
+  
+  // Product management state
+  const [productTypeFilter, setProductTypeFilter] = useState<ProductType | 'all'>('all');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin'); // For demo purposes
   
   // Editable master data
   const [masterData, setMasterData] = useState<MasterData>(() => {
@@ -34,7 +40,12 @@ export default function Home() {
       const saved = localStorage.getItem('qiro_master_data');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          // Ensure products array exists for backward compatibility
+          if (!parsed.products) {
+            parsed.products = defaultMasterData.products || [];
+          }
+          return parsed;
         } catch (e) {
           return defaultMasterData;
         }
@@ -345,6 +356,40 @@ export default function Home() {
     }
   };
 
+  // Product management functions
+  const addProduct = (product: Product) => {
+    setMasterData(prev => ({
+      ...prev,
+      products: [...(prev.products || []), product]
+    }));
+    setIsAddingProduct(false);
+    setEditingProduct(null);
+  };
+
+  const updateProduct = (code: string, updates: Partial<Product>) => {
+    setMasterData(prev => ({
+      ...prev,
+      products: (prev.products || []).map(p => p.code === code ? { ...p, ...updates } : p)
+    }));
+  };
+
+  const deleteProduct = (code: string) => {
+    if (confirm(`Delete product ${code}?`)) {
+      setMasterData(prev => ({
+        ...prev,
+        products: (prev.products || []).filter(p => p.code !== code)
+      }));
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    const products = masterData.products || [];
+    if (productTypeFilter === 'all') {
+      return products;
+    }
+    return products.filter(p => p.productType === productTypeFilter);
+  }, [masterData.products, productTypeFilter]);
+
   const resetToDefaults = () => {
     if (confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
       setMasterData(defaultMasterData);
@@ -391,7 +436,7 @@ export default function Home() {
 
               {/* Tabs */}
               <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200">
-                {(['frames', 'handles', 'glass', 'connectors', 'defaults'] as const).map(tab => (
+                {(['frames', 'handles', 'glass', 'connectors', 'products', 'defaults'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -405,6 +450,7 @@ export default function Home() {
                     {tab === 'handles' && 'Handle Profiles'}
                     {tab === 'glass' && 'Glass Types'}
                     {tab === 'connectors' && 'Connectors'}
+                    {tab === 'products' && 'Products'}
                     {tab === 'defaults' && 'Defaults'}
                   </button>
                 ))}
@@ -846,6 +892,425 @@ export default function Home() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Products Tab */}
+                {activeTab === 'products' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Products ({(masterData.products || []).length})</h3>
+                      <button
+                        onClick={() => {
+                          setIsAddingProduct(true);
+                          setEditingProduct({
+                            code: '',
+                            name: '',
+                            productType: 'frame-profile',
+                            compatibleDoorTypes: ['openable'],
+                            costPrice: 0,
+                            sellingPrice: 0,
+                          });
+                        }}
+                        className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                      >
+                        + Add Product
+                      </button>
+                    </div>
+
+                    {/* Product Type Filter */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Type</label>
+                      <select
+                        value={productTypeFilter}
+                        onChange={e => setProductTypeFilter(e.target.value as ProductType | 'all')}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                      >
+                        <option value="all">All Products ({(masterData.products || []).length})</option>
+                        <option value="frame-profile">Frame Profiles ({(masterData.products || []).filter(p => p.productType === 'frame-profile').length})</option>
+                        <option value="handle-profile">Handle Profiles ({(masterData.products || []).filter(p => p.productType === 'handle-profile').length})</option>
+                        <option value="divider-profile">Divider Profiles ({(masterData.products || []).filter(p => p.productType === 'divider-profile').length})</option>
+                        <option value="divider-connector">Divider Connectors ({(masterData.products || []).filter(p => p.productType === 'divider-connector').length})</option>
+                        <option value="gasket">Gaskets ({(masterData.products || []).filter(p => p.productType === 'gasket').length})</option>
+                        <option value="lock">Locks ({(masterData.products || []).filter(p => p.productType === 'lock').length})</option>
+                        <option value="hinge">Hinges ({(masterData.products || []).filter(p => p.productType === 'hinge').length})</option>
+                        <option value="sliding-system">Sliding Systems ({(masterData.products || []).filter(p => p.productType === 'sliding-system').length})</option>
+                        <option value="connector">Connectors ({(masterData.products || []).filter(p => p.productType === 'connector').length})</option>
+                      </select>
+                    </div>
+
+                    {/* Role Toggle (Demo) */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <label className="flex items-center space-x-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={userRole === 'admin'}
+                          onChange={e => setUserRole(e.target.checked ? 'admin' : 'staff')}
+                          className="rounded"
+                        />
+                        <span className="font-medium">Admin Mode {userRole === 'admin' ? '✓' : '(Staff View)'}</span>
+                      </label>
+                      <p className="text-xs text-gray-600 mt-1">Staff can only see Selling Price, Admin sees Cost Price too</p>
+                    </div>
+
+                    {/* Product List */}
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {filteredProducts.map((product, index) => (
+                        <div key={product.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="font-mono text-sm font-semibold bg-black text-white px-2 py-0.5 rounded">
+                                  {product.code}
+                                </span>
+                                <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">
+                                  {product.productType}
+                                </span>
+                              </div>
+                              <h4 className="font-semibold text-gray-900">{product.name}</h4>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingProduct(product);
+                                  setIsAddingProduct(false);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteProduct(product.code)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                            {userRole === 'admin' && (
+                              <div>
+                                <span className="font-medium">Cost Price:</span> {formatCurrency(product.costPrice)}
+                              </div>
+                            )}
+                            <div>
+                              <span className="font-medium">Selling Price:</span> {formatCurrency(product.sellingPrice)}
+                            </div>
+                            {product.finish && (
+                              <div>
+                                <span className="font-medium">Finish:</span> {product.finish}
+                              </div>
+                            )}
+                            {product.width && (
+                              <div>
+                                <span className="font-medium">Width:</span> {product.width}mm
+                              </div>
+                            )}
+                            {product.height && (
+                              <div>
+                                <span className="font-medium">Height:</span> {product.height}mm
+                              </div>
+                            )}
+                            {product.thickness && (
+                              <div>
+                                <span className="font-medium">Thickness:</span> {product.thickness}mm
+                              </div>
+                            )}
+                            {product.perMeterWeight && (
+                              <div>
+                                <span className="font-medium">Weight:</span> {product.perMeterWeight}kg/m
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {product.compatibleDoorTypes.map(type => (
+                              <span key={type} className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                                {type}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {filteredProducts.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          No products found for this filter
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add/Edit Product Form */}
+                    {(isAddingProduct || editingProduct) && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+                          <h3 className="text-xl font-bold mb-4">
+                            {isAddingProduct ? 'Add New Product' : `Edit Product: ${editingProduct?.code}`}
+                          </h3>
+
+                          <div className="space-y-4">
+                            {/* Product Code */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Product Code *</label>
+                              <input
+                                type="text"
+                                value={editingProduct?.code || ''}
+                                onChange={e => setEditingProduct(prev => prev ? { ...prev, code: e.target.value } : null)}
+                                disabled={!isAddingProduct}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                                placeholder="e.g., FP001, HP001"
+                              />
+                            </div>
+
+                            {/* Product Name */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                              <input
+                                type="text"
+                                value={editingProduct?.name || ''}
+                                onChange={e => setEditingProduct(prev => prev ? { ...prev, name: e.target.value } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                placeholder="e.g., Aluminum Frame 20x40"
+                              />
+                            </div>
+
+                            {/* Product Type */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Product Type *</label>
+                              <select
+                                value={editingProduct?.productType || 'frame-profile'}
+                                onChange={e => setEditingProduct(prev => prev ? { ...prev, productType: e.target.value as ProductType } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              >
+                                <option value="frame-profile">Frame Profile</option>
+                                <option value="handle-profile">Handle Profile</option>
+                                <option value="divider-profile">Divider Profile</option>
+                                <option value="divider-connector">Divider Connector</option>
+                                <option value="gasket">Gasket</option>
+                                <option value="lock">Lock</option>
+                                <option value="hinge">Hinge</option>
+                                <option value="sliding-system">Sliding System</option>
+                                <option value="connector">Connector</option>
+                              </select>
+                            </div>
+
+                            {/* Compatible Door Types */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Compatible Door Types *</label>
+                              <select
+                                multiple
+                                size={4}
+                                value={editingProduct?.compatibleDoorTypes || []}
+                                onChange={e => {
+                                  const selected = Array.from(e.target.selectedOptions, option => option.value as DoorTypeCompatibility);
+                                  setEditingProduct(prev => prev ? { ...prev, compatibleDoorTypes: selected } : null);
+                                }}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              >
+                                <option value="openable">Openable</option>
+                                <option value="sliding">Sliding</option>
+                                <option value="air-hinge">Air Hinge</option>
+                                <option value="pin-hinge">Pin Hinge</option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                            </div>
+
+                            {/* Pricing */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price * {userRole !== 'admin' && '(Admin Only)'}</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={editingProduct?.costPrice || 0}
+                                  onChange={e => setEditingProduct(prev => prev ? { ...prev, costPrice: parseFloat(e.target.value) || 0 } : null)}
+                                  disabled={userRole !== 'admin'}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price *</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={editingProduct?.sellingPrice || 0}
+                                  onChange={e => setEditingProduct(prev => prev ? { ...prev, sellingPrice: parseFloat(e.target.value) || 0 } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Finish */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Finish</label>
+                              <input
+                                type="text"
+                                value={editingProduct?.finish || ''}
+                                onChange={e => setEditingProduct(prev => prev ? { ...prev, finish: e.target.value } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                placeholder="e.g., Anodized Silver, Brushed Nickel"
+                              />
+                            </div>
+
+                            {/* Conditional Fields - Dimensions */}
+                            {(editingProduct?.productType === 'frame-profile' || 
+                              editingProduct?.productType === 'divider-profile') && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Width (mm)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={editingProduct?.width || ''}
+                                    onChange={e => setEditingProduct(prev => prev ? { ...prev, width: parseFloat(e.target.value) || undefined } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  />
+                                </div>
+                                {editingProduct?.productType === 'frame-profile' && (
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Height (mm)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editingProduct?.height || ''}
+                                      onChange={e => setEditingProduct(prev => prev ? { ...prev, height: parseFloat(e.target.value) || undefined } : null)}
+                                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Thickness for Gaskets */}
+                            {editingProduct?.productType === 'gasket' && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Thickness (mm)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={editingProduct?.thickness || ''}
+                                  onChange={e => setEditingProduct(prev => prev ? { ...prev, thickness: parseFloat(e.target.value) || undefined } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            )}
+
+                            {/* Per Meter Weight */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Per Meter Weight (kg)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={editingProduct?.perMeterWeight || ''}
+                                onChange={e => setEditingProduct(prev => prev ? { ...prev, perMeterWeight: parseFloat(e.target.value) || undefined } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              />
+                            </div>
+
+                            {/* Price Type Specific Fields */}
+                            <div className="grid grid-cols-2 gap-4">
+                              {(editingProduct?.productType === 'frame-profile' || 
+                                editingProduct?.productType === 'handle-profile' ||
+                                editingProduct?.productType === 'divider-profile' ||
+                                editingProduct?.productType === 'gasket' ||
+                                editingProduct?.productType === 'sliding-system') && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Meter</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editingProduct?.pricePerMeter || ''}
+                                    onChange={e => setEditingProduct(prev => prev ? { ...prev, pricePerMeter: parseFloat(e.target.value) || undefined } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  />
+                                </div>
+                              )}
+
+                              {(editingProduct?.productType === 'lock' || 
+                                editingProduct?.productType === 'hinge' ||
+                                editingProduct?.productType === 'connector' ||
+                                editingProduct?.productType === 'divider-connector') && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Price Per Unit</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editingProduct?.pricePerUnit || ''}
+                                    onChange={e => setEditingProduct(prev => prev ? { ...prev, pricePerUnit: parseFloat(e.target.value) || undefined } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  />
+                                </div>
+                              )}
+
+                              {(editingProduct?.productType === 'connector' || 
+                                editingProduct?.productType === 'divider-connector') && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Connector Price</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editingProduct?.connectorPrice || ''}
+                                    onChange={e => setEditingProduct(prev => prev ? { ...prev, connectorPrice: parseFloat(e.target.value) || undefined } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  />
+                                </div>
+                              )}
+
+                              {editingProduct?.productType === 'handle-profile' && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Handle Price</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={editingProduct?.handlePrice || ''}
+                                    onChange={e => setEditingProduct(prev => prev ? { ...prev, handlePrice: parseFloat(e.target.value) || undefined } : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex space-x-3 pt-4">
+                              <button
+                                onClick={() => {
+                                  if (editingProduct && editingProduct.code && editingProduct.name) {
+                                    if (isAddingProduct) {
+                                      addProduct(editingProduct);
+                                    } else {
+                                      updateProduct(editingProduct.code, editingProduct);
+                                      setEditingProduct(null);
+                                    }
+                                  } else {
+                                    alert('Please fill in all required fields (Code, Name, Product Type)');
+                                  }
+                                }}
+                                className="flex-1 bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold"
+                              >
+                                {isAddingProduct ? 'Add Product' : 'Save Changes'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingProduct(null);
+                                  setIsAddingProduct(false);
+                                }}
+                                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

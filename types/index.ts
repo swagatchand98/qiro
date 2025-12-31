@@ -1,5 +1,41 @@
 // Core Data Types
 
+export type ProductType = 
+  | 'frame-profile' 
+  | 'handle-profile' 
+  | 'divider-profile' 
+  | 'divider-connector' 
+  | 'gasket' 
+  | 'lock' 
+  | 'hinge' 
+  | 'sliding-system' 
+  | 'connector';
+
+export type DoorTypeCompatibility = 'openable' | 'sliding' | 'air-hinge' | 'pin-hinge';
+
+export interface Product {
+  code: string;
+  name: string;
+  productType: ProductType;
+  compatibleDoorTypes: DoorTypeCompatibility[];
+  finish?: string;
+  costPrice: number; // Hidden from staff
+  sellingPrice: number; // Dealer price
+  perMeterWeight?: number; // Optional
+  imageUrl?: string;
+  
+  // Product-specific fields
+  width?: number; // For profiles (mm)
+  height?: number; // For profiles (mm)
+  pricePerMeter?: number; // For profiles
+  connectorPrice?: number; // For items that need connectors
+  handlePrice?: number; // For items that come with handles
+  pricePerUnit?: number; // For units like connectors, locks
+  pricePerSqFt?: number; // For glass
+  thickness?: number; // For glass, gaskets (mm)
+}
+
+// Legacy interfaces for backward compatibility
 export interface FrameProfile {
   code: string;
   name: string;
@@ -133,6 +169,7 @@ export interface MasterData {
   handleProfiles: HandleProfile[];
   glassTypes: GlassType[];
   connectorTypes: ConnectorType[];
+  products: Product[]; // New comprehensive product system
   defaultGST: number;
   defaultGlassWastage: number;
 }

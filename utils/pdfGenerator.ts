@@ -288,8 +288,8 @@ export const generateQuotationPDF = async (
       ['Glass Type', `${glassType?.name || 'N/A'} (${glassType?.code})`],
       ['Glass Area', `${calc.glassArea} sq.ft (${calc.glassAreaWithWastage} sq.ft with wastage)`],
       ['Hinge Position', door.hingePosition],
-      ['Hinge Code', door.hingeCode],
-      ['Hinge Quantity', door.hingeQuantity.toString()],
+      ['Hinge Code', door.hingeCode || 'N/A'],
+      ['Hinge Quantity', (door.hingeQuantity || 2).toString()],
       ['Carcass Thickness', `${door.carcassThickness} mm`],
     ];
     
@@ -298,9 +298,9 @@ export const generateQuotationPDF = async (
     
     specs.forEach(([label, value]) => {
       doc.setFont('helvetica', 'bold');
-      doc.text(label, margin, yPos);
+      doc.text(label || '', margin, yPos);
       doc.setFont('helvetica', 'normal');
-      doc.text(value, margin + 55, yPos);
+      doc.text(value || '', margin + 55, yPos);
       yPos += 6;
       doc.line(margin, yPos - 4, pageWidth - margin, yPos - 4);
       yPos += 0.5;
@@ -401,7 +401,7 @@ export const generateQuotationPDF = async (
     ];
     
     costItems.forEach(([label, value]) => {
-      doc.text(label, margin, yPos);
+      doc.text(String(label), margin, yPos);
       doc.text(formatCurrency(value as number), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 6;
     });

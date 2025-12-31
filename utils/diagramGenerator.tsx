@@ -51,7 +51,8 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
   
   // Render different content based on door type
   const renderDoorContent = () => {
-    if (door.doorType === 'double') {
+    if (door.doorType === 'openable' && door.width > 1200) {
+      // Wide openable door (render as double panel)
       const panelWidth = scaledWidth / 2;
       const leftGlassX = glassX;
       const rightGlassX = glassX + panelWidth;
@@ -80,7 +81,7 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
           <circle cx={rightHandleX} cy={handleY} r={6} fill="#FFD700" stroke="#DAA520" strokeWidth="1" />
         </>
       );
-    } else if (door.doorType === 'lift-up') {
+    } else if (door.doorType === 'air-hinge') {
       const handleX = offsetX + scaledWidth / 2;
       const handleY = offsetY + scaledHeight - 30;
       
@@ -128,7 +129,7 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
           <path d={`M ${offsetX + scaledWidth / 2} ${offsetY + scaledHeight + 25} L ${offsetX + scaledWidth / 2 + 40} ${offsetY + scaledHeight + 25}`} stroke="#4CAF50" strokeWidth="2" markerEnd="url(#arrowhead)" />
         </>
       );
-    } else if (door.doorType === 'bi-fold') {
+    } else if (door.doorType === 'pin-hinge') {
       const panelWidth = scaledWidth / 2;
       const leftGlassX = glassX;
       const rightGlassX = glassX + panelWidth;
@@ -169,7 +170,7 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
         ? offsetX + scaledWidth - scaledFrameThickness / 2
         : offsetX + scaledWidth / 2;
       
-      const handleY = offsetY + (door.handleOffset * scale);
+      const handleY = offsetY + ((door.handleOffset || 500) * scale);
       const handleHeight = scaledHeight * 0.6;
       
       const hingeX = door.hingePosition === 'left' ? offsetX : offsetX + scaledWidth;
@@ -195,7 +196,7 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
           <circle cx={hingeX} cy={hingeTopY} r={3} fill="#333" />
           <circle cx={hingeX} cy={hingeBottomY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
           <circle cx={hingeX} cy={hingeBottomY} r={3} fill="#333" />
-          {door.hingeQuantity >= 3 && (
+          {(door.hingeQuantity || 2) >= 3 && (
             <>
               <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={6} fill="#666" stroke="#333" strokeWidth="1" />
               <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={3} fill="#333" />
@@ -258,6 +259,72 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
       
       {/* Door content based on type */}
       {renderDoorContent()}
+      
+      {/* Divider lines */}
+      {door.hasDividers && door.dividerConfig && (
+        <g>
+          {/* Horizontal dividers (from top) */}
+          {door.dividerConfig.horizontal?.map((positionMm, idx) => {
+            const scaledPosition = positionMm * scale;
+            const dividerY = offsetY + scaledPosition;
+            if (dividerY > offsetY && dividerY < offsetY + scaledHeight) {
+              return (
+                <g key={`h-divider-${idx}`}>
+                  <line
+                    x1={glassX}
+                    y1={dividerY}
+                    x2={glassX + glassWidth}
+                    y2={dividerY}
+                    stroke="#FF6B6B"
+                    strokeWidth="2"
+                    strokeDasharray="4,4"
+                  />
+                  <text
+                    x={glassX + glassWidth + 5}
+                    y={dividerY + 4}
+                    className="text-xs font-medium"
+                    fill="#FF6B6B"
+                  >
+                    {positionMm}mm
+                  </text>
+                </g>
+              );
+            }
+            return null;
+          })}
+          
+          {/* Vertical dividers (from left) */}
+          {door.dividerConfig.vertical?.map((positionMm, idx) => {
+            const scaledPosition = positionMm * scale;
+            const dividerX = offsetX + scaledPosition;
+            if (dividerX > offsetX && dividerX < offsetX + scaledWidth) {
+              return (
+                <g key={`v-divider-${idx}`}>
+                  <line
+                    x1={dividerX}
+                    y1={glassY}
+                    x2={dividerX}
+                    y2={glassY + glassHeight}
+                    stroke="#4ECDC4"
+                    strokeWidth="2"
+                    strokeDasharray="4,4"
+                  />
+                  <text
+                    x={dividerX}
+                    y={glassY - 8}
+                    textAnchor="middle"
+                    className="text-xs font-medium"
+                    fill="#4ECDC4"
+                  >
+                    {positionMm}mm
+                  </text>
+                </g>
+              );
+            }
+            return null;
+          })}
+        </g>
+      )}
       
       {/* Width dimension line (top) */}
       <g>
@@ -360,33 +427,8 @@ export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: numb
   // Generate different diagrams based on door type
   let doorContent = '';
   
-  if (door.doorType === 'single') {
-    // Single door
-    const handleY = offsetY + scaledHeight / 2;
-    const handleX = door.handlePosition === 'left' 
-      ? offsetX + 5
-      : door.handlePosition === 'right'
-      ? offsetX + scaledWidth - 5
-      : offsetX + scaledWidth / 2;
-    
-    doorContent = `
-      <!-- Door Frame -->
-      <rect x="${offsetX}" y="${offsetY}" width="${scaledWidth}" height="${scaledHeight}" 
-            fill="#8B4513" stroke="#000" stroke-width="2" />
-      
-      <!-- Glass Area -->
-      <rect x="${glassX}" y="${glassY}" width="${glassWidth}" height="${glassHeight}" 
-            fill="#B3E5FC" stroke="#0277BD" stroke-width="1.5" opacity="0.7" />
-      
-      <text x="${glassX + glassWidth / 2}" y="${glassY + glassHeight / 2}" 
-            text-anchor="middle" font-size="14" font-weight="bold" fill="#01579B">GLASS</text>
-      
-      <!-- Handle -->
-      <circle cx="${handleX}" cy="${handleY}" r="6" fill="#FFD700" stroke="#000" stroke-width="1.5" />
-      <text x="${handleX}" y="${handleY + 20}" text-anchor="middle" font-size="10" fill="#000">Handle</text>
-    `;
-  } else if (door.doorType === 'double') {
-    // Double door - two panels side by side
+  if (door.doorType === 'openable' && door.width > 1200) {
+    // Wide openable door - two panels side by side
     const panelWidth = scaledWidth / 2;
     const leftGlassX = glassX;
     const rightGlassX = glassX + panelWidth;
@@ -425,8 +467,33 @@ export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: numb
       <circle cx="${leftHandleX}" cy="${handleY}" r="5" fill="#FFD700" stroke="#000" stroke-width="1.5" />
       <circle cx="${rightHandleX}" cy="${handleY}" r="5" fill="#FFD700" stroke="#000" stroke-width="1.5" />
     `;
-  } else if (door.doorType === 'lift-up') {
-    // Lift-up door with upward opening indication
+  } else if (door.doorType === 'openable') {
+    // Standard openable door
+    const handleY = offsetY + scaledHeight / 2;
+    const handleX = door.handlePosition === 'left' 
+      ? offsetX + 5
+      : door.handlePosition === 'right'
+      ? offsetX + scaledWidth - 5
+      : offsetX + scaledWidth / 2;
+    
+    doorContent = `
+      <!-- Door Frame -->
+      <rect x="${offsetX}" y="${offsetY}" width="${scaledWidth}" height="${scaledHeight}" 
+            fill="#8B4513" stroke="#000" stroke-width="2" />
+      
+      <!-- Glass Area -->
+      <rect x="${glassX}" y="${glassY}" width="${glassWidth}" height="${glassHeight}" 
+            fill="#B3E5FC" stroke="#0277BD" stroke-width="1.5" opacity="0.7" />
+      
+      <text x="${glassX + glassWidth / 2}" y="${glassY + glassHeight / 2}" 
+            text-anchor="middle" font-size="14" font-weight="bold" fill="#01579B">GLASS</text>
+      
+      <!-- Handle -->
+      <circle cx="${handleX}" cy="${handleY}" r="6" fill="#FFD700" stroke="#000" stroke-width="1.5" />
+      <text x="${handleX}" y="${handleY + 20}" text-anchor="middle" font-size="10" fill="#000">Handle</text>
+    `;
+  } else if (door.doorType === 'air-hinge') {
+    // Air-hinge door with upward opening indication
     const handleX = offsetX + scaledWidth / 2;
     const handleY = offsetY + scaledHeight - 30;
     
@@ -489,8 +556,8 @@ export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: numb
       <path d="M ${offsetX + scaledWidth / 2} ${offsetY + scaledHeight + 20} L ${offsetX + scaledWidth / 2 + 30} ${offsetY + scaledHeight + 20} L ${offsetX + scaledWidth / 2 + 25} ${offsetY + scaledHeight + 15} M ${offsetX + scaledWidth / 2 + 30} ${offsetY + scaledHeight + 20} L ${offsetX + scaledWidth / 2 + 25} ${offsetY + scaledHeight + 25}" 
             stroke="#4CAF50" stroke-width="2" fill="none" />
     `;
-  } else if (door.doorType === 'bi-fold') {
-    // Bi-fold door with folding panels
+  } else if (door.doorType === 'pin-hinge') {
+    // Pin-hinge door with folding panels
     const panelWidth = scaledWidth / 2;
     const leftGlassX = glassX;
     const rightGlassX = glassX + panelWidth;
@@ -567,7 +634,7 @@ export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: numb
       
       <!-- Details -->
       <text x="${width / 2}" y="${height - 15}" text-anchor="middle" font-size="11" fill="#333">
-        ${door.doorType.charAt(0).toUpperCase() + door.doorType.slice(1)} | Qty: ${door.quantity} | ${door.doorType === 'sliding' || door.doorType === 'bi-fold' ? 'Panels: 2' : 'Hinge: ' + door.hingePosition}
+        ${door.doorType.charAt(0).toUpperCase() + door.doorType.slice(1)} | Qty: ${door.quantity} | ${door.doorType === 'sliding' || door.doorType === 'pin-hinge' ? 'Panels: 2' : 'Hinge: ' + door.hingePosition}
       </text>
     </svg>
   `;

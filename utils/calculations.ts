@@ -7,6 +7,11 @@ import {
   AdditionalComponent,
   OptionalItem,
   MeasurementUnit,
+  SlidingBundle,
+  DividerMode,
+  DividerSettings,
+  DividerConfig,
+  PricingSettings,
 } from '../types';
 import { masterData } from '../data/masterData';
 
@@ -19,6 +24,200 @@ export const convertToMm = (value: number, unit: MeasurementUnit): number => {
 };
 
 export const sqMmToSqFt = (sqMm: number): number => sqMm / 92903.04;
+
+// DIVIDER LOGIC: Calculate divider positions based on mode
+export const calculateDividerPositions = (
+  widthMm: number,
+  heightMm: number,
+  mode: DividerMode,
+  settings: DividerSettings,
+  manualConfig?: DividerConfig
+): DividerConfig => {
+  if (mode === 'manual' && manualConfig) {
+    return manualConfig;
+  }
+
+  if (mode === 'fixed-offset') {
+    // Use predefined offsets from settings
+    // Filter positions that fit within the door dimensions
+    const horizontal = settings.fixedOffsetHorizontal.filter(pos => pos > 0 && pos < heightMm);
+    const vertical = settings.fixedOffsetVertical.filter(pos => pos > 0 && pos < widthMm);
+    return { horizontal, vertical };
+  }
+
+  if (mode === 'equal-split') {
+    // Divide the door into equal sections
+    const horizontal: number[] = [];
+    const vertical: number[] = [];
+
+    // Calculate horizontal divider positions (splits height)
+    if (settings.equalSplitHorizontalCount > 1) {
+      const sectionHeight = heightMm / settings.equalSplitHorizontalCount;
+      for (let i = 1; i < settings.equalSplitHorizontalCount; i++) {
+        horizontal.push(Math.round(sectionHeight * i));
+      }
+    }
+
+    // Calculate vertical divider positions (splits width)
+    if (settings.equalSplitVerticalCount > 1) {
+      const sectionWidth = widthMm / settings.equalSplitVerticalCount;
+      for (let i = 1; i < settings.equalSplitVerticalCount; i++) {
+        vertical.push(Math.round(sectionWidth * i));
+      }
+    }
+
+    return { horizontal, vertical };
+  }
+
+  // Default: no dividers
+  return { horizontal: [], vertical: [] };
+};
+
+// Format divider positions for display
+export const formatDividerPositions = (config: DividerConfig): string => {
+  const horizontal = config.horizontal.length > 0 
+    ? `H: ${config.horizontal.join('mm, ')}mm` 
+    : 'H: None';
+  const vertical = config.vertical.length > 0 
+    ? `V: ${config.vertical.join('mm, ')}mm` 
+    : 'V: None';
+  return `${horizontal} | ${vertical}`;
+};
+
+// AUTO-SELECT: Sliding bundle based on door specifications
+export const autoSelectSlidingBundle = (
+  widthMm: number,
+  heightMm: number,
+  glassThicknessMm: number = 5,
+  doorCount: number = 1
+): SlidingBundle | null => {
+  // Calculate approximate door weight
+  // Formula: (width_m * height_m) * glass_density_kg/sqm * thickness_factor
+  const widthM = widthMm / 1000;
+  const heightM = heightMm / 1000;
+  const areaM2 = widthM * heightM;
+  
+  // Glass density: ~2.5 kg per mm per sqm
+  // Add frame weight: ~3 kg/m perimeter
+  const glassWeight = areaM2 * glassThicknessMm * 2.5;
+  const perimeterM = 2 * (widthM + heightM);
+  const frameWeight = perimeterM * 3;
+  const totalWeightPerDoor = glassWeight + frameWeight;
+  const totalWeight = totalWeightPerDoor * doorCount;
+  
+  // Find suitable bundles sorted by weight capacity
+  const suitableBundles = masterData.slidingBundles
+    .filter(bundle => bundle.maxDoorWeight >= totalWeight)
+    .sort((a, b) => a.maxDoorWeight - b.maxDoorWeight);
+  
+  // Return the most appropriate bundle (smallest that fits)
+  // Prefer soft-close for heavier doors
+  if (totalWeight > 60 && suitableBundles.some(b => b.hasSoftClose)) {
+    return suitableBundles.find(b => b.hasSoftClose) || suitableBundles[0] || null;
+  }
+  
+  return suitableBundles[0] || null;
+};
+
+// AUTO-CALCULATE: Hinge count and positions based on door height
+export const calculateHingeConfig = (
+  heightMm: number,
+  doorType: string
+): { hingeCount: number; hingePositions: number[] } => {
+  if (doorType !== 'openable' && doorType !== 'pin-hinge') {
+    return { hingeCount: 0, hingePositions: [] };
+  }
+
+  let hingeCount = 2; // Default: 2 hinges
+  
+  // Auto-calculate hinge count based on height
+  if (heightMm > 2400) {
+    hingeCount = 4; // Very tall doors
+  } else if (heightMm > 1800) {
+    hingeCount = 3; // Standard tall doors
+  }
+
+  // Calculate hinge positions (in mm from top)
+  const hingePositions: number[] = [];
+  
+  if (hingeCount === 2) {
+    // Top hinge at 150mm, bottom at 150mm from bottom
+    hingePositions.push(150, heightMm - 150);
+  } else if (hingeCount === 3) {
+    // Top at 150mm, middle at center, bottom at 150mm from bottom
+    hingePositions.push(150, heightMm / 2, heightMm - 150);
+  } else if (hingeCount === 4) {
+    // Evenly distributed
+    const spacing = heightMm / 5;
+    hingePositions.push(spacing, spacing * 2, spacing * 3, spacing * 4);
+  }
+
+  return {
+    hingeCount,
+    hingePositions: hingePositions.map(p => Math.round(p)),
+  };
+};
+
+// AUTO-CALCULATE: Connectors required based on door type
+export const calculateConnectorsRequired = (
+  doorType: string,
+  hasDividers: boolean = false,
+  dividerConfig?: { horizontal: number[]; vertical: number[] }
+): number => {
+  let baseConnectors = 4; // 4 corners minimum
+  
+  if (doorType === 'sliding') {
+    baseConnectors = 8; // Sliding doors need more connectors
+  }
+
+  // Add connectors for dividers
+  if (hasDividers && dividerConfig) {
+    const horizontalDividers = dividerConfig.horizontal?.length || 0;
+    const verticalDividers = dividerConfig.vertical?.length || 0;
+    
+    // Each divider intersection needs connectors
+    const intersections = (horizontalDividers + 1) * (verticalDividers + 1);
+    baseConnectors += intersections * 2; // 2 connectors per intersection
+  }
+
+  return baseConnectors;
+};
+
+// AUTO-CALCULATE: Total profile length
+export const calculateProfileLength = (
+  widthMm: number,
+  heightMm: number,
+  doorType: string,
+  frameThickness: number = 25
+): number => {
+  // Basic perimeter
+  const perimeter = 2 * (widthMm + heightMm);
+  
+  // Additional reinforcement based on door type
+  let additionalLength = 0;
+  
+  if (doorType === 'sliding') {
+    additionalLength = widthMm * 0.5; // 50% extra for tracks
+  } else if (doorType === 'air-hinge' || doorType === 'pin-hinge') {
+    additionalLength = widthMm * 0.3; // 30% extra for reinforcement
+  }
+
+  return perimeter + additionalLength;
+};
+
+// AUTO-CALCULATE: Divider positions and length
+export const calculateDividerLength = (
+  widthMm: number,
+  heightMm: number,
+  dividerConfig?: { horizontal: number[]; vertical: number[] }
+): number => {
+  if (!dividerConfig) return 0;
+
+  const horizontalLength = (dividerConfig.horizontal?.length || 0) * widthMm;
+  const verticalLength = (dividerConfig.vertical?.length || 0) * heightMm;
+
+  return horizontalLength + verticalLength;
+};
 
 // Calculate cutting scheme for a door
 export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme => {
@@ -94,50 +293,175 @@ export const calculateGlassArea = (
   };
 };
 
-// Calculate costs for a single door
+// Calculate costs for a single door with comprehensive auto-calculations
 export const calculateDoorCosts = (
   door: DoorConfiguration,
   wastagePercentage: number
 ): DoorCalculation => {
-  const cuttingScheme = calculateCuttingScheme(door);
-  const { glassArea, glassAreaWithWastage } = calculateGlassArea(door, wastagePercentage);
+  const heightMm = convertToMm(door.height, door.measurementUnit);
+  const widthMm = convertToMm(door.width, door.measurementUnit);
   
-  // Frame cost
-  const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
-  const framePricePerMm = (frameProfile?.pricePerMeter || 0) / 1000;
-  const frameCost = cuttingScheme.totalFrameLength * framePricePerMm * door.quantity;
+  // Get profile from new system or legacy
+  const profileCode = door.profileCode || door.frameProfileCode || '';
+  const frameProfile = masterData.frameProfiles.find(f => f.code === profileCode);
+  const frameThickness = frameProfile?.width || 25;
   
-  // Handle cost
+  // AUTO-CALCULATE: Total profile length
+  const totalProfileLengthMm = calculateProfileLength(widthMm, heightMm, door.doorType, frameThickness);
+  const totalProfileLength = totalProfileLengthMm / 1000; // Convert to meters
+  
+  // Calculate frame cost
+  const framePricePerMeter = frameProfile?.pricePerMeter || 0;
+  const frameCost = totalProfileLength * framePricePerMeter * door.quantity;
+  
+  // AUTO-CALCULATE: Handle length and cost
+  let totalHandleLength: number | undefined;
   let handleCost = 0;
-  if (door.handleProfileCode) {
+  if (door.hasHandle && door.handleProfileCode) {
+    totalHandleLength = (heightMm - 100) / 1000; // Handle runs vertically, 100mm less for clearance, in meters
     const handleProfile = masterData.handleProfiles.find(h => h.code === door.handleProfileCode);
-    const handlePricePerMm = (handleProfile?.pricePerMeter || 0) / 1000;
-    handleCost = cuttingScheme.totalHandleLength * handlePricePerMm * door.quantity;
+    const handlePricePerMeter = handleProfile?.pricePerMeter || 0;
+    handleCost = totalHandleLength * handlePricePerMeter * door.quantity;
   }
   
-  // Glass cost
+  // AUTO-CALCULATE: Glass area and cost
+  const { glassArea, glassAreaWithWastage } = calculateGlassArea(
+    { ...door, frameProfileCode: profileCode, height: door.height, width: door.width, measurementUnit: door.measurementUnit } as any,
+    wastagePercentage
+  );
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
   const glassCost = glassAreaWithWastage * (glassType?.pricePerSqFt || 0) * door.quantity;
   
-  // Connector cost
-  let connectorCost = 0;
-  if (door.connectorCode && door.connectorQuantity) {
-    const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
-    connectorCost = door.connectorQuantity * (connector?.pricePerUnit || 0) * door.quantity;
+  // AUTO-CALCULATE: Connectors required
+  const connectorsRequired = door.connectorQuantity || calculateConnectorsRequired(
+    door.doorType,
+    door.hasDividers,
+    door.dividerConfig
+  );
+  const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
+  const connectorCost = connectorsRequired * (connector?.pricePerUnit || 0) * door.quantity;
+  
+  // AUTO-CALCULATE: Hinge count and positions (for openable/pin-hinge)
+  const hingeConfig = calculateHingeConfig(heightMm, door.doorType);
+  const hingeCount = door.hingeQuantity || hingeConfig.hingeCount;
+  const hingePositions = door.hingePositionMm || hingeConfig.hingePositions;
+  
+  // Calculate hinge cost
+  let hingeCost = 0;
+  if (hingeCount > 0 && door.hingeCode) {
+    // Find hinge in products or use default price
+    const hingeProduct = masterData.products?.find(p => p.code === door.hingeCode && p.productType === 'hinge');
+    const hingePricePerUnit = hingeProduct?.pricePerUnit || hingeProduct?.sellingPrice || 50;
+    hingeCost = hingeCount * hingePricePerUnit * door.quantity;
   }
   
-  const totalCost = frameCost + handleCost + glassCost + connectorCost;
+  // AUTO-CALCULATE: Divider length and cost
+  let dividerLength: number | undefined;
+  let dividerConnectorsRequired: number | undefined;
+  let dividerCost = 0;
+  
+  if (door.hasDividers && door.dividerConfig) {
+    dividerLength = calculateDividerLength(widthMm, heightMm, door.dividerConfig) / 1000; // meters
+    
+    const dividerProfile = masterData.products?.find(p => p.code === door.dividerProfileCode && p.productType === 'divider-profile');
+    const dividerPricePerMeter = dividerProfile?.pricePerMeter || dividerProfile?.sellingPrice || 0;
+    dividerCost = dividerLength * dividerPricePerMeter * door.quantity;
+    
+    // Divider connectors
+    const horizontalCount = door.dividerConfig.horizontal?.length || 0;
+    const verticalCount = door.dividerConfig.vertical?.length || 0;
+    dividerConnectorsRequired = (horizontalCount + verticalCount) * 4; // 4 connectors per divider
+    
+    const dividerConnector = masterData.products?.find(p => p.code === door.dividerConnectorCode && p.productType === 'divider-connector');
+    const dividerConnectorPrice = dividerConnector?.pricePerUnit || dividerConnector?.sellingPrice || 0;
+    dividerCost += dividerConnectorsRequired * dividerConnectorPrice * door.quantity;
+  }
+  
+  // AUTO-CALCULATE: Gasket cost
+  let gasketCost = 0;
+  if (door.gasketCode) {
+    const gasketProduct = masterData.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
+    const gasketPricePerMeter = gasketProduct?.pricePerMeter || gasketProduct?.sellingPrice || 0;
+    const gasketLength = totalProfileLength; // Gasket runs along entire perimeter
+    gasketCost = gasketLength * gasketPricePerMeter * door.quantity;
+  }
+  
+  // AUTO-CALCULATE: Lock cost
+  let lockCost = 0;
+  if (door.lockCode) {
+    const lockProduct = masterData.products?.find(p => p.code === door.lockCode && p.productType === 'lock');
+    const lockPricePerUnit = lockProduct?.pricePerUnit || lockProduct?.sellingPrice || 0;
+    lockCost = lockPricePerUnit * door.quantity; // 1 lock per door
+  }
+  
+  // AUTO-CALCULATE: Sliding system cost (for sliding doors)
+  let slidingSystemCost = 0;
+  if (door.doorType === 'sliding' && door.slidingSystemCode) {
+    const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
+    const slidingPricePerMeter = slidingSystem?.pricePerMeter || slidingSystem?.sellingPrice || 0;
+    slidingSystemCost = (widthMm / 1000) * slidingPricePerMeter * door.quantity;
+  }
+  
+  // Calculate cutting scheme (for reference)
+  const cuttingScheme = calculateCuttingScheme({ ...door, frameProfileCode: profileCode } as any);
+  
+  // AUTO-CALCULATE: Total selling price per unit
+  const totalSellingPrice = 
+    frameCost / door.quantity +
+    handleCost / door.quantity +
+    glassCost / door.quantity +
+    connectorCost / door.quantity +
+    hingeCost / door.quantity +
+    dividerCost / door.quantity +
+    gasketCost / door.quantity +
+    lockCost / door.quantity +
+    slidingSystemCost / door.quantity;
+  
+  // AUTO-CALCULATE: Total order value
+  const totalOrderValue = totalSellingPrice * door.quantity;
   
   return {
     doorId: door.id,
+    
+    // Profile/Frame
+    totalProfileLength: parseFloat(totalProfileLength.toFixed(3)),
     frameCost: parseFloat(frameCost.toFixed(2)),
+    
+    // Handle
+    totalHandleLength,
     handleCost: parseFloat(handleCost.toFixed(2)),
-    glassCost: parseFloat(glassCost.toFixed(2)),
-    connectorCost: parseFloat(connectorCost.toFixed(2)),
+    
+    // Glass
     glassArea,
     glassAreaWithWastage,
+    glassCost: parseFloat(glassCost.toFixed(2)),
+    
+    // Connectors
+    connectorsRequired,
+    connectorCost: parseFloat(connectorCost.toFixed(2)),
+    
+    // Hinges
+    hingeCount,
+    hingePositions,
+    hingeCost: parseFloat(hingeCost.toFixed(2)),
+    
+    // Dividers
+    dividerLength,
+    dividerConnectorsRequired,
+    dividerCost: parseFloat(dividerCost.toFixed(2)),
+    
+    // Additional Hardware
+    gasketCost: parseFloat(gasketCost.toFixed(2)),
+    lockCost: parseFloat(lockCost.toFixed(2)),
+    slidingSystemCost: parseFloat(slidingSystemCost.toFixed(2)),
+    
+    // Cutting Scheme
     cuttingScheme,
-    totalCost: parseFloat(totalCost.toFixed(2)),
+    
+    // Totals
+    totalSellingPrice: parseFloat(totalSellingPrice.toFixed(2)),
+    totalOrderValue: parseFloat(totalOrderValue.toFixed(2)),
+    totalCost: parseFloat(totalOrderValue.toFixed(2)), // Legacy field
   };
 };
 
@@ -160,19 +484,21 @@ export const calculateOptionalItemTotal = (item: OptionalItem): number => {
 // Calculate overall cost summary
 export const calculateCostSummary = (
   quotation: QuotationData,
-  doorCalculations: DoorCalculation[]
+  doorCalculations: DoorCalculation[],
+  pricingSettings?: { makingChargeType: 'fixed' | 'percentage'; makingChargeValue: number; defaultDiscount: number; taxRates: { gst: number; cgst?: number; sgst?: number } }
 ): CostSummary => {
-  // Total hardware cost (frame + handle + connectors)
-  const totalHardwareCost = doorCalculations.reduce(
-    (sum, calc) => sum + calc.frameCost + calc.handleCost + calc.connectorCost,
-    0
-  );
+  const pricing = pricingSettings || masterData.pricingSettings;
   
-  // Total glass cost
-  const totalGlassCost = doorCalculations.reduce(
-    (sum, calc) => sum + calc.glassCost,
-    0
-  );
+  // Component-wise breakdown from door calculations
+  const totalProfileCost = doorCalculations.reduce((sum, calc) => sum + calc.frameCost, 0);
+  const totalHandleCost = doorCalculations.reduce((sum, calc) => sum + calc.handleCost, 0);
+  const totalGlassCost = doorCalculations.reduce((sum, calc) => sum + calc.glassCost, 0);
+  const totalConnectorCost = doorCalculations.reduce((sum, calc) => sum + calc.connectorCost, 0);
+  const totalHingeCost = doorCalculations.reduce((sum, calc) => sum + calc.hingeCost, 0);
+  const totalLockCost = doorCalculations.reduce((sum, calc) => sum + calc.lockCost, 0);
+  const totalGasketCost = doorCalculations.reduce((sum, calc) => sum + calc.gasketCost, 0);
+  const totalSlidingSystemCost = doorCalculations.reduce((sum, calc) => sum + calc.slidingSystemCost, 0);
+  const totalDividerCost = doorCalculations.reduce((sum, calc) => sum + calc.dividerCost, 0);
   
   // Total additional components cost
   const totalAdditionalCost = quotation.additionalComponents.reduce(
@@ -186,14 +512,36 @@ export const calculateCostSummary = (
     0
   );
   
-  // Subtotal before discount
-  const subtotal = totalHardwareCost + totalGlassCost + totalAdditionalCost + totalOptionalCost;
+  // Material subtotal (all materials before making charges)
+  const materialSubtotal = 
+    totalProfileCost +
+    totalHandleCost +
+    totalGlassCost +
+    totalConnectorCost +
+    totalHingeCost +
+    totalLockCost +
+    totalGasketCost +
+    totalSlidingSystemCost +
+    totalDividerCost +
+    totalAdditionalCost +
+    totalOptionalCost;
+  
+  // Making charges calculation
+  let makingCharges = 0;
+  if (pricing.makingChargeType === 'fixed') {
+    makingCharges = pricing.makingChargeValue; // Fixed amount in ₹
+  } else if (pricing.makingChargeType === 'percentage') {
+    makingCharges = (materialSubtotal * pricing.makingChargeValue) / 100; // Percentage of material cost
+  }
+  
+  // Subtotal with making charges
+  const subtotalWithMaking = materialSubtotal + makingCharges;
   
   // Global discount
-  const discount = (subtotal * quotation.globalDiscount) / 100;
+  const discount = (subtotalWithMaking * quotation.globalDiscount) / 100;
   
-  // Taxable amount
-  const taxableAmount = subtotal - discount;
+  // Taxable amount (after discount)
+  const taxableAmount = subtotalWithMaking - discount;
   
   // GST calculation
   const gstAmount = (taxableAmount * quotation.gstPercentage) / 100;
@@ -201,20 +549,36 @@ export const calculateCostSummary = (
   // Final amount
   const finalAmount = taxableAmount + gstAmount;
   
-  // Calculate total savings (discount)
-  const totalSavings = discount;
+  // Legacy field: total hardware cost (for backward compatibility)
+  const totalHardwareCost = totalProfileCost + totalHandleCost + totalConnectorCost + totalHingeCost + totalLockCost + totalGasketCost + totalSlidingSystemCost + totalDividerCost;
   
   return {
-    totalHardwareCost: parseFloat(totalHardwareCost.toFixed(2)),
+    // Component-wise breakdown
+    totalProfileCost: parseFloat(totalProfileCost.toFixed(2)),
+    totalHandleCost: parseFloat(totalHandleCost.toFixed(2)),
     totalGlassCost: parseFloat(totalGlassCost.toFixed(2)),
+    totalConnectorCost: parseFloat(totalConnectorCost.toFixed(2)),
+    totalHingeCost: parseFloat(totalHingeCost.toFixed(2)),
+    totalLockCost: parseFloat(totalLockCost.toFixed(2)),
+    totalGasketCost: parseFloat(totalGasketCost.toFixed(2)),
+    totalSlidingSystemCost: parseFloat(totalSlidingSystemCost.toFixed(2)),
+    totalDividerCost: parseFloat(totalDividerCost.toFixed(2)),
     totalAdditionalCost: parseFloat(totalAdditionalCost.toFixed(2)),
     totalOptionalCost: parseFloat(totalOptionalCost.toFixed(2)),
-    subtotal: parseFloat(subtotal.toFixed(2)),
+    
+    // Calculation stages
+    materialSubtotal: parseFloat(materialSubtotal.toFixed(2)),
+    makingCharges: parseFloat(makingCharges.toFixed(2)),
+    subtotalWithMaking: parseFloat(subtotalWithMaking.toFixed(2)),
     discount: parseFloat(discount.toFixed(2)),
     taxableAmount: parseFloat(taxableAmount.toFixed(2)),
     gstAmount: parseFloat(gstAmount.toFixed(2)),
     finalAmount: parseFloat(finalAmount.toFixed(2)),
-    totalSavings: parseFloat(totalSavings.toFixed(2)),
+    
+    // Legacy fields for backward compatibility
+    totalHardwareCost: parseFloat(totalHardwareCost.toFixed(2)),
+    subtotal: parseFloat(materialSubtotal.toFixed(2)),
+    totalSavings: parseFloat(discount.toFixed(2)),
   };
 };
 

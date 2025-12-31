@@ -9,6 +9,9 @@ import {
   OptionalItem,
   DoorCalculation,
   CostSummary,
+  Client,
+  Job,
+  SlidingBundle,
 } from '../types';
 import { masterData as defaultMasterData } from '../data/masterData';
 import {
@@ -16,16 +19,21 @@ import {
   calculateCostSummary,
   calculateCuttingScheme,
   formatCurrency,
+  autoSelectSlidingBundle,
+  calculateDividerPositions,
+  formatDividerPositions,
+  convertToMm,
 } from '../utils/calculations';
 import { DoorDiagram } from '../utils/diagramGenerator';
 import { generateQuotationPDF } from '../utils/pdfGenerator';
 import { exportToExcel, exportToText, saveQuotationToLocalStorage } from '../utils/exportUtils';
-import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, ProductType, DoorTypeCompatibility } from '../types';
+import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, ProductType, DoorTypeCompatibility, DividerMode, MakingChargeType, PricingSettings } from '../types';
+
 
 export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'products' | 'defaults'>('frames');
+  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'products' | 'clients' | 'jobs' | 'sliding-bundles' | 'defaults'>('frames');
   const [showReport, setShowReport] = useState(false);
   
   // Product management state
@@ -34,6 +42,17 @@ export default function Home() {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('admin'); // For demo purposes
   
+  // Client and Job management state
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [isAddingClient, setIsAddingClient] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [isAddingJob, setIsAddingJob] = useState(false);
+  
+  // Sliding bundle management state
+  const [editingSlidingBundle, setEditingSlidingBundle] = useState<SlidingBundle | null>(null);
+  const [isAddingSlidingBundle, setIsAddingSlidingBundle] = useState(false);
+  
   // Editable master data
   const [masterData, setMasterData] = useState<MasterData>(() => {
     if (typeof window !== 'undefined') {
@@ -41,9 +60,24 @@ export default function Home() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          // Ensure products array exists for backward compatibility
+          // Ensure arrays exist for backward compatibility
           if (!parsed.products) {
             parsed.products = defaultMasterData.products || [];
+          }
+          if (!parsed.clients) {
+            parsed.clients = [];
+          }
+          if (!parsed.jobs) {
+            parsed.jobs = [];
+          }
+          if (!parsed.slidingBundles) {
+            parsed.slidingBundles = defaultMasterData.slidingBundles || [];
+          }
+          if (!parsed.dividerSettings) {
+            parsed.dividerSettings = defaultMasterData.dividerSettings;
+          }
+          if (!parsed.pricingSettings) {
+            parsed.pricingSettings = defaultMasterData.pricingSettings;
           }
           return parsed;
         } catch (e) {
@@ -63,11 +97,21 @@ export default function Home() {
 
   const [quotation, setQuotation] = useState<QuotationData>({
     id: uuidv4(),
+    // Legacy fields
     customerName: '',
     mobileNumber: '',
     address: '',
     projectName: '',
     date: new Date().toISOString().split('T')[0],
+    // New client/job fields
+    clientName: '',
+    firmName: '',
+    phone: '',
+    city: '',
+    salesperson: '',
+    quoteDate: new Date().toISOString().split('T')[0],
+    deliveryDate: '',
+    // Data
     doors: [],
     additionalComponents: [],
     optionalItems: [],
@@ -79,21 +123,52 @@ export default function Home() {
   const [currentDoor, setCurrentDoor] = useState<DoorConfiguration>({
     id: uuidv4(),
     doorName: '',
-    doorType: 'single',
+    
+    // Door Type & Profile
+    doorType: 'openable', // New: openable | sliding | air-hinge | pin-hinge
+    profileCode: masterData.frameProfiles[0]?.code || '',
+    
+    // Dimensions
     measurementUnit: 'mm',
-    height: 0,
     width: 0,
+    height: 0,
+    thickness: undefined,
     quantity: 1,
+    
+    // Handle Configuration
+    hasHandle: true,
+    handleProfileCode: masterData.handleProfiles[0]?.code,
     handlePosition: 'right',
     handleOffset: 500,
+    
+    // Opening Direction
+    openingDirection: 'right',
+    
+    // Divider Configuration
+    hasDividers: false,
+    dividerConfig: undefined,
+    dividerProfileCode: undefined,
+    dividerConnectorCode: undefined,
+    
+    // Hardware (auto-calculated)
     hingePosition: 'left',
-    hingeCode: 'H-001',
-    hingeQuantity: 2,
-    carcassThickness: 18,
-    frameProfileCode: masterData.frameProfiles[0].code,
-    glassTypeCode: masterData.glassTypes[0].code,
+    hingeCode: undefined,
+    hingeQuantity: undefined,
+    hingePositionMm: undefined,
+    
+    // Connectors (auto-calculated)
     connectorCode: masterData.connectorTypes[0]?.code,
-    connectorQuantity: 4,
+    connectorQuantity: undefined,
+    
+    // Additional Components
+    gasketCode: undefined,
+    lockCode: undefined,
+    slidingSystemCode: undefined,
+    glassTypeCode: masterData.glassTypes[0]?.code,
+    
+    // Legacy fields for backward compatibility
+    frameProfileCode: masterData.frameProfiles[0]?.code || '',
+    carcassThickness: 18,
     liftAvailable: true,
   });
 
@@ -106,8 +181,8 @@ export default function Home() {
 
   // Calculate cost summary
   const costSummary = useMemo<CostSummary>(() => {
-    return calculateCostSummary(quotation, doorCalculations);
-  }, [quotation, doorCalculations]);
+    return calculateCostSummary(quotation, doorCalculations, masterData.pricingSettings);
+  }, [quotation, doorCalculations, masterData.pricingSettings]);
 
   // Get filtered options based on selected frame profile
   const filteredOptions = useMemo(() => {
@@ -160,7 +235,7 @@ export default function Home() {
     setCurrentDoor({
       id: uuidv4(),
       doorName: '',
-      doorType: 'single',
+      doorType: 'openable',
       measurementUnit: 'mm',
       height: 0,
       width: 0,
@@ -172,6 +247,10 @@ export default function Home() {
       hingeQuantity: 2,
       carcassThickness: 18,
       frameProfileCode: masterData.frameProfiles[0].code,
+      profileCode: masterData.frameProfiles[0].code,
+      hasHandle: true,
+      openingDirection: 'right',
+      hasDividers: false,
       glassTypeCode: masterData.glassTypes[0].code,
       connectorCode: masterData.connectorTypes[0]?.code,
       connectorQuantity: 4,
@@ -390,6 +469,77 @@ export default function Home() {
     return products.filter(p => p.productType === productTypeFilter);
   }, [masterData.products, productTypeFilter]);
 
+  // Client management functions
+  const addClient = (client: Client) => {
+    setMasterData(prev => ({
+      ...prev,
+      clients: [...(prev.clients || []), client]
+    }));
+    setIsAddingClient(false);
+    setEditingClient(null);
+  };
+
+  const updateClient = (id: string, updates: Partial<Client>) => {
+    setMasterData(prev => ({
+      ...prev,
+      clients: (prev.clients || []).map(c => c.id === id ? { ...c, ...updates, lastUpdated: new Date().toISOString() } : c)
+    }));
+  };
+
+  const deleteClient = (id: string) => {
+    if (confirm('Delete this client? This will not delete associated jobs.')) {
+      setMasterData(prev => ({
+        ...prev,
+        clients: (prev.clients || []).filter(c => c.id !== id)
+      }));
+    }
+  };
+
+  const selectClientForQuotation = (clientId: string) => {
+    const client = masterData.clients?.find(c => c.id === clientId);
+    if (client) {
+      setQuotation(prev => ({
+        ...prev,
+        clientId: client.id,
+        clientName: client.clientName,
+        firmName: client.firmName || '',
+        phone: client.phone,
+        city: client.city || '',
+        address: client.address || '',
+        // Update legacy fields
+        customerName: client.clientName,
+        mobileNumber: client.phone,
+      }));
+      setSelectedClientId(clientId);
+    }
+  };
+
+  // Job management functions
+  const addJob = (job: Job) => {
+    setMasterData(prev => ({
+      ...prev,
+      jobs: [...(prev.jobs || []), job]
+    }));
+    setIsAddingJob(false);
+    setEditingJob(null);
+  };
+
+  const updateJob = (id: string, updates: Partial<Job>) => {
+    setMasterData(prev => ({
+      ...prev,
+      jobs: (prev.jobs || []).map(j => j.id === id ? { ...j, ...updates, lastUpdated: new Date().toISOString() } : j)
+    }));
+  };
+
+  const deleteJob = (id: string) => {
+    if (confirm('Delete this job?')) {
+      setMasterData(prev => ({
+        ...prev,
+        jobs: (prev.jobs || []).filter(j => j.id !== id)
+      }));
+    }
+  };
+
   const resetToDefaults = () => {
     if (confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
       setMasterData(defaultMasterData);
@@ -436,7 +586,7 @@ export default function Home() {
 
               {/* Tabs */}
               <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200">
-                {(['frames', 'handles', 'glass', 'connectors', 'products', 'defaults'] as const).map(tab => (
+                {(['frames', 'handles', 'glass', 'connectors', 'products', 'clients', 'jobs', 'sliding-bundles', 'defaults'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -451,6 +601,9 @@ export default function Home() {
                     {tab === 'glass' && 'Glass Types'}
                     {tab === 'connectors' && 'Connectors'}
                     {tab === 'products' && 'Products'}
+                    {tab === 'clients' && 'Clients'}
+                    {tab === 'jobs' && 'Jobs'}
+                    {tab === 'sliding-bundles' && 'Sliding Bundles'}
                     {tab === 'defaults' && 'Defaults'}
                   </button>
                 ))}
@@ -1314,6 +1467,692 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Clients Tab */}
+                {activeTab === 'clients' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Clients ({(masterData.clients || []).length})</h3>
+                      <button
+                        onClick={() => {
+                          setIsAddingClient(true);
+                          const now = new Date().toISOString();
+                          setEditingClient({
+                            id: uuidv4(),
+                            clientName: '',
+                            phone: '',
+                            createdDate: now,
+                            lastUpdated: now,
+                          });
+                        }}
+                        className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                      >
+                        + Add Client
+                      </button>
+                    </div>
+
+                    {/* Clients List */}
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {(masterData.clients || []).map((client) => (
+                        <div key={client.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900">{client.clientName}</h4>
+                              {client.firmName && (
+                                <p className="text-sm text-gray-600">{client.firmName}</p>
+                              )}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingClient(client);
+                                  setIsAddingClient(false);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteClient(client.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                            <div>
+                              <span className="font-medium">Phone:</span> {client.phone}
+                            </div>
+                            {client.city && (
+                              <div>
+                                <span className="font-medium">City:</span> {client.city}
+                              </div>
+                            )}
+                            {client.email && (
+                              <div className="col-span-2">
+                                <span className="font-medium">Email:</span> {client.email}
+                              </div>
+                            )}
+                            {client.address && (
+                              <div className="col-span-2">
+                                <span className="font-medium">Address:</span> {client.address}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {(masterData.clients || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          No clients added yet
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add/Edit Client Form */}
+                    {(isAddingClient || editingClient) && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+                          <h3 className="text-xl font-bold mb-4">
+                            {isAddingClient ? 'Add New Client' : `Edit Client: ${editingClient?.clientName}`}
+                          </h3>
+
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+                                <input
+                                  type="text"
+                                  value={editingClient?.clientName || ''}
+                                  onChange={e => setEditingClient(prev => prev ? { ...prev, clientName: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="Enter client name"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Firm Name</label>
+                                <input
+                                  type="text"
+                                  value={editingClient?.firmName || ''}
+                                  onChange={e => setEditingClient(prev => prev ? { ...prev, firmName: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="Company name"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                                <input
+                                  type="tel"
+                                  value={editingClient?.phone || ''}
+                                  onChange={e => setEditingClient(prev => prev ? { ...prev, phone: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="+91-XXXXXXXXXX"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                                <input
+                                  type="text"
+                                  value={editingClient?.city || ''}
+                                  onChange={e => setEditingClient(prev => prev ? { ...prev, city: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="Enter city"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                              <input
+                                type="email"
+                                value={editingClient?.email || ''}
+                                onChange={e => setEditingClient(prev => prev ? { ...prev, email: e.target.value } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                placeholder="email@example.com"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                              <textarea
+                                value={editingClient?.address || ''}
+                                onChange={e => setEditingClient(prev => prev ? { ...prev, address: e.target.value } : null)}
+                                rows={3}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                placeholder="Full address"
+                              />
+                            </div>
+
+                            <div className="flex space-x-3 pt-4">
+                              <button
+                                onClick={() => {
+                                  if (editingClient && editingClient.clientName && editingClient.phone) {
+                                    if (isAddingClient) {
+                                      addClient(editingClient);
+                                    } else {
+                                      updateClient(editingClient.id, editingClient);
+                                      setEditingClient(null);
+                                    }
+                                  } else {
+                                    alert('Please fill in Client Name and Phone');
+                                  }
+                                }}
+                                className="flex-1 bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold"
+                              >
+                                {isAddingClient ? 'Add Client' : 'Save Changes'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingClient(null);
+                                  setIsAddingClient(false);
+                                }}
+                                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Jobs Tab */}
+                {activeTab === 'jobs' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Jobs ({(masterData.jobs || []).length})</h3>
+                      <button
+                        onClick={() => {
+                          setIsAddingJob(true);
+                          const now = new Date().toISOString();
+                          setEditingJob({
+                            id: uuidv4(),
+                            jobReferenceId: '',
+                            clientId: '',
+                            clientName: '',
+                            quoteDate: new Date().toISOString().split('T')[0],
+                            status: 'draft',
+                            createdDate: now,
+                            lastUpdated: now,
+                          });
+                        }}
+                        className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                      >
+                        + Add Job
+                      </button>
+                    </div>
+
+                    {/* Jobs List */}
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {(masterData.jobs || []).map((job) => (
+                        <div key={job.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <span className="font-mono text-sm font-semibold bg-black text-white px-2 py-0.5 rounded">
+                                  {job.jobReferenceId}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  job.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  job.status === 'in-production' ? 'bg-blue-100 text-blue-800' :
+                                  job.status === 'approved' ? 'bg-purple-100 text-purple-800' :
+                                  job.status === 'quoted' ? 'bg-yellow-100 text-yellow-800' :
+                                  job.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {job.status}
+                                </span>
+                              </div>
+                              <h4 className="font-semibold text-gray-900">{job.clientName}</h4>
+                              {job.firmName && <p className="text-sm text-gray-600">{job.firmName}</p>}
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingJob(job);
+                                  setIsAddingJob(false);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => deleteJob(job.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                            <div>
+                              <span className="font-medium">Quote Date:</span> {job.quoteDate}
+                            </div>
+                            {job.deliveryDate && (
+                              <div>
+                                <span className="font-medium">Delivery:</span> {job.deliveryDate}
+                              </div>
+                            )}
+                            {job.salesperson && (
+                              <div>
+                                <span className="font-medium">Salesperson:</span> {job.salesperson}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {(masterData.jobs || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          No jobs created yet
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add/Edit Job Form */}
+                    {(isAddingJob || editingJob) && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+                          <h3 className="text-xl font-bold mb-4">
+                            {isAddingJob ? 'Add New Job' : `Edit Job: ${editingJob?.jobReferenceId}`}
+                          </h3>
+
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Job Reference ID *</label>
+                                <input
+                                  type="text"
+                                  value={editingJob?.jobReferenceId || ''}
+                                  onChange={e => setEditingJob(prev => prev ? { ...prev, jobReferenceId: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                  placeholder="e.g., JOB-2025-001"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                                <select
+                                  value={editingJob?.status || 'draft'}
+                                  onChange={e => setEditingJob(prev => prev ? { ...prev, status: e.target.value as any } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                >
+                                  <option value="draft">Draft</option>
+                                  <option value="quoted">Quoted</option>
+                                  <option value="approved">Approved</option>
+                                  <option value="in-production">In Production</option>
+                                  <option value="completed">Completed</option>
+                                  <option value="cancelled">Cancelled</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Select Client *</label>
+                              <select
+                                value={editingJob?.clientId || ''}
+                                onChange={e => {
+                                  const client = masterData.clients?.find(c => c.id === e.target.value);
+                                  setEditingJob(prev => prev ? { 
+                                    ...prev, 
+                                    clientId: e.target.value,
+                                    clientName: client?.clientName || '',
+                                    firmName: client?.firmName
+                                  } : null);
+                                }}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              >
+                                <option value="">-- Select Client --</option>
+                                {(masterData.clients || []).map(client => (
+                                  <option key={client.id} value={client.id}>
+                                    {client.clientName} {client.firmName ? `(${client.firmName})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Salesperson</label>
+                              <input
+                                type="text"
+                                value={editingJob?.salesperson || ''}
+                                onChange={e => setEditingJob(prev => prev ? { ...prev, salesperson: e.target.value } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                placeholder="Sales rep name"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Quote Date *</label>
+                                <input
+                                  type="date"
+                                  value={editingJob?.quoteDate || ''}
+                                  onChange={e => setEditingJob(prev => prev ? { ...prev, quoteDate: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Date</label>
+                                <input
+                                  type="date"
+                                  value={editingJob?.deliveryDate || ''}
+                                  onChange={e => setEditingJob(prev => prev ? { ...prev, deliveryDate: e.target.value } : null)}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex space-x-3 pt-4">
+                              <button
+                                onClick={() => {
+                                  if (editingJob && editingJob.jobReferenceId && editingJob.clientId) {
+                                    if (isAddingJob) {
+                                      addJob(editingJob);
+                                    } else {
+                                      updateJob(editingJob.id, editingJob);
+                                      setEditingJob(null);
+                                    }
+                                  } else {
+                                    alert('Please fill in Job Reference ID and select a Client');
+                                  }
+                                }}
+                                className="flex-1 bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-lg font-semibold"
+                              >
+                                {isAddingJob ? 'Add Job' : 'Save Changes'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingJob(null);
+                                  setIsAddingJob(false);
+                                }}
+                                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sliding Bundles Tab */}
+                {activeTab === 'sliding-bundles' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Sliding System Bundles ({masterData.slidingBundles?.length || 0})</h3>
+                      <button
+                        onClick={() => {
+                          const newBundle: SlidingBundle = {
+                            code: `SL-${Date.now().toString().slice(-4)}`,
+                            name: 'New Sliding Bundle',
+                            maxDoorWeight: 50,
+                            mountingType: 'top-hung',
+                            hasSoftClose: false,
+                            components: [
+                              { name: 'Track', description: 'Sliding track', quantity: 1 },
+                              { name: 'Rollers', description: 'Roller wheels', quantity: 2 },
+                            ],
+                            costPrice: 1000,
+                            sellingPrice: 1500,
+                            pricePerMeter: 750,
+                            pricePerDoor: 1500,
+                            createdDate: new Date().toISOString(),
+                            lastUpdated: new Date().toISOString(),
+                          };
+                          setMasterData(prev => ({
+                            ...prev,
+                            slidingBundles: [...(prev.slidingBundles || []), newBundle]
+                          }));
+                        }}
+                        className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
+                      >
+                        + Add Bundle
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {(masterData.slidingBundles || []).map((bundle, index) => (
+                        <div key={bundle.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Bundle Code</label>
+                              <input
+                                type="text"
+                                value={bundle.code}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], code: e.target.value, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Bundle Name</label>
+                              <input
+                                type="text"
+                                value={bundle.name}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], name: e.target.value, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Max Door Weight (kg)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={bundle.maxDoorWeight}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], maxDoorWeight: parseFloat(e.target.value) || 0, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Mounting Type</label>
+                              <select
+                                value={bundle.mountingType}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], mountingType: e.target.value as any, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                              >
+                                <option value="top-hung">Top Hung</option>
+                                <option value="bottom-rolling">Bottom Rolling</option>
+                                <option value="side-hung">Side Hung</option>
+                              </select>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={bundle.hasSoftClose}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], hasSoftClose: e.target.checked, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="mr-2"
+                              />
+                              <label className="text-xs font-medium text-gray-700">Has Soft Close</label>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Cost Price {userRole === 'staff' && '(Hidden)'}
+                              </label>
+                              {userRole === 'admin' ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={bundle.costPrice}
+                                  onChange={e => {
+                                    const updated = [...(masterData.slidingBundles || [])];
+                                    updated[index] = { ...updated[index], costPrice: parseFloat(e.target.value) || 0, lastUpdated: new Date().toISOString() };
+                                    setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                                />
+                              ) : (
+                                <div className="w-full px-3 py-2 bg-gray-200 rounded text-sm text-gray-500">******</div>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Selling Price (per door)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={bundle.sellingPrice}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], sellingPrice: parseFloat(e.target.value) || 0, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price Per Meter (track)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={bundle.pricePerMeter || 0}
+                                onChange={e => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = { ...updated[index], pricePerMeter: parseFloat(e.target.value) || undefined, lastUpdated: new Date().toISOString() };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                                placeholder="Optional"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 bg-white p-3 rounded border border-gray-300">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="text-xs font-semibold text-gray-700">Components Included:</label>
+                              <button
+                                onClick={() => {
+                                  const updated = [...(masterData.slidingBundles || [])];
+                                  updated[index] = {
+                                    ...updated[index],
+                                    components: [
+                                      ...updated[index].components,
+                                      { name: 'New Component', description: '', quantity: 1 }
+                                    ],
+                                    lastUpdated: new Date().toISOString()
+                                  };
+                                  setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                }}
+                                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                              >
+                                + Component
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {bundle.components.map((component, compIndex) => (
+                                <div key={compIndex} className="grid grid-cols-12 gap-2 text-xs">
+                                  <input
+                                    type="text"
+                                    value={component.name}
+                                    onChange={e => {
+                                      const updated = [...(masterData.slidingBundles || [])];
+                                      const newComponents = [...updated[index].components];
+                                      newComponents[compIndex] = { ...newComponents[compIndex], name: e.target.value };
+                                      updated[index] = { ...updated[index], components: newComponents, lastUpdated: new Date().toISOString() };
+                                      setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                    }}
+                                    className="col-span-4 px-2 py-1 border border-gray-300 rounded"
+                                    placeholder="Component name"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={component.description}
+                                    onChange={e => {
+                                      const updated = [...(masterData.slidingBundles || [])];
+                                      const newComponents = [...updated[index].components];
+                                      newComponents[compIndex] = { ...newComponents[compIndex], description: e.target.value };
+                                      updated[index] = { ...updated[index], components: newComponents, lastUpdated: new Date().toISOString() };
+                                      setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                    }}
+                                    className="col-span-5 px-2 py-1 border border-gray-300 rounded"
+                                    placeholder="Description"
+                                  />
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={component.quantity}
+                                    onChange={e => {
+                                      const updated = [...(masterData.slidingBundles || [])];
+                                      const newComponents = [...updated[index].components];
+                                      newComponents[compIndex] = { ...newComponents[compIndex], quantity: parseInt(e.target.value) || 1 };
+                                      updated[index] = { ...updated[index], components: newComponents, lastUpdated: new Date().toISOString() };
+                                      setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                    }}
+                                    className="col-span-2 px-2 py-1 border border-gray-300 rounded"
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const updated = [...(masterData.slidingBundles || [])];
+                                      updated[index] = {
+                                        ...updated[index],
+                                        components: updated[index].components.filter((_, i) => i !== compIndex),
+                                        lastUpdated: new Date().toISOString()
+                                      };
+                                      setMasterData(prev => ({ ...prev, slidingBundles: updated }));
+                                    }}
+                                    className="col-span-1 text-red-600 hover:text-red-800"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete bundle ${bundle.code}?`)) {
+                                setMasterData(prev => ({
+                                  ...prev,
+                                  slidingBundles: (prev.slidingBundles || []).filter((_, i) => i !== index)
+                                }));
+                              }
+                            }}
+                            className="mt-3 text-red-600 text-xs hover:text-red-800"
+                          >
+                            Delete Bundle
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="mt-4 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h4 className="text-sm font-semibold text-blue-900 mb-2">ℹ️ Auto-Selection Logic</h4>
+                      <p className="text-xs text-gray-700">
+                        When a sliding door is configured, the system automatically calculates the door weight based on dimensions and glass thickness, 
+                        then selects the most appropriate bundle from this list. The system chooses the smallest bundle that can handle the calculated weight.
+                        For heavier doors (&gt;60kg), soft-close bundles are preferred if available.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Defaults Tab */}
                 {activeTab === 'defaults' && (
                   <div>
@@ -1343,6 +2182,275 @@ export default function Home() {
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                         />
                       </div>
+                      
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 mt-6">
+                        <h4 className="text-md font-semibold text-purple-800 mb-3">📐 Divider Settings</h4>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Default Divider Mode</label>
+                            <select
+                              value={masterData.dividerSettings.defaultMode}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                dividerSettings: {
+                                  ...prev.dividerSettings,
+                                  defaultMode: e.target.value as DividerMode
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            >
+                              <option value="fixed-offset">Fixed Offset Mode</option>
+                              <option value="equal-split">Equal Split Mode</option>
+                              <option value="manual">Manual Input Mode</option>
+                            </select>
+                          </div>
+
+                          {masterData.dividerSettings.defaultMode === 'fixed-offset' && (
+                            <div className="bg-white p-3 rounded border border-gray-300 space-y-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Horizontal Positions (mm from top, comma-separated)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={masterData.dividerSettings.fixedOffsetHorizontal.join(', ')}
+                                  onChange={e => {
+                                    const positions = e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v));
+                                    setMasterData(prev => ({
+                                      ...prev,
+                                      dividerSettings: {
+                                        ...prev.dividerSettings,
+                                        fixedOffsetHorizontal: positions
+                                      }
+                                    }));
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                  placeholder="e.g., 900, 1800"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Example: 900, 1800 (creates dividers at 900mm and 1800mm from top)</p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Vertical Positions (mm from left, comma-separated)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={masterData.dividerSettings.fixedOffsetVertical.join(', ')}
+                                  onChange={e => {
+                                    const positions = e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v));
+                                    setMasterData(prev => ({
+                                      ...prev,
+                                      dividerSettings: {
+                                        ...prev.dividerSettings,
+                                        fixedOffsetVertical: positions
+                                      }
+                                    }));
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                  placeholder="e.g., 900"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Example: 900 (creates a divider at 900mm from left)</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {masterData.dividerSettings.defaultMode === 'equal-split' && (
+                            <div className="bg-white p-3 rounded border border-gray-300 space-y-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Horizontal Sections (divides height)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="10"
+                                  value={masterData.dividerSettings.equalSplitHorizontalCount}
+                                  onChange={e => setMasterData(prev => ({
+                                    ...prev,
+                                    dividerSettings: {
+                                      ...prev.dividerSettings,
+                                      equalSplitHorizontalCount: parseInt(e.target.value) || 1
+                                    }
+                                  }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Sections: {masterData.dividerSettings.equalSplitHorizontalCount}, 
+                                  Dividers: {masterData.dividerSettings.equalSplitHorizontalCount - 1}
+                                </p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Vertical Sections (divides width)
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="10"
+                                  value={masterData.dividerSettings.equalSplitVerticalCount}
+                                  onChange={e => setMasterData(prev => ({
+                                    ...prev,
+                                    dividerSettings: {
+                                      ...prev.dividerSettings,
+                                      equalSplitVerticalCount: parseInt(e.target.value) || 1
+                                    }
+                                  }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Sections: {masterData.dividerSettings.equalSplitVerticalCount}, 
+                                  Dividers: {masterData.dividerSettings.equalSplitVerticalCount - 1}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {masterData.dividerSettings.defaultMode === 'manual' && (
+                            <div className="bg-white p-3 rounded border border-gray-300">
+                              <p className="text-sm text-gray-600">
+                                In Manual Input Mode, users will be prompted to enter custom divider positions for each door individually.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mt-6">
+                        <h4 className="text-md font-semibold text-blue-800 mb-3">💰 Pricing & Charges</h4>
+                        
+                        <div className="space-y-4">
+                          <div className="bg-white p-3 rounded border border-gray-300">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Making Charge Type</label>
+                            <select
+                              value={masterData.pricingSettings.makingChargeType}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  makingChargeType: e.target.value as 'fixed' | 'percentage'
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-3"
+                            >
+                              <option value="fixed">Fixed Amount (₹)</option>
+                              <option value="percentage">Percentage (%)</option>
+                            </select>
+                            
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              {masterData.pricingSettings.makingChargeType === 'fixed' ? 'Making Charge Amount (₹)' : 'Making Charge Percentage (%)'}
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step={masterData.pricingSettings.makingChargeType === 'fixed' ? '1' : '0.1'}
+                              value={masterData.pricingSettings.makingChargeValue}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  makingChargeValue: parseFloat(e.target.value) || 0
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              {masterData.pricingSettings.makingChargeType === 'fixed' 
+                                ? 'Fixed amount added to final bill' 
+                                : `${masterData.pricingSettings.makingChargeValue}% of material subtotal`}
+                            </p>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded border border-gray-300">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Default Discount (%)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={masterData.pricingSettings.defaultDiscount}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  defaultDiscount: parseFloat(e.target.value) || 0
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Default discount applied to new quotations</p>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded border border-gray-300">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">GST Rate (%)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={masterData.pricingSettings.taxRates.gst}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  taxRates: {
+                                    ...prev.pricingSettings.taxRates,
+                                    gst: parseFloat(e.target.value) || 0
+                                  }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-3"
+                            />
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">CGST (%) - Optional</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={masterData.pricingSettings.taxRates.cgst || 0}
+                                  onChange={e => setMasterData(prev => ({
+                                    ...prev,
+                                    pricingSettings: {
+                                      ...prev.pricingSettings,
+                                      taxRates: {
+                                        ...prev.pricingSettings.taxRates,
+                                        cgst: parseFloat(e.target.value) || undefined
+                                      }
+                                    }
+                                  }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">SGST (%) - Optional</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={masterData.pricingSettings.taxRates.sgst || 0}
+                                  onChange={e => setMasterData(prev => ({
+                                    ...prev,
+                                    pricingSettings: {
+                                      ...prev.pricingSettings,
+                                      taxRates: {
+                                        ...prev.pricingSettings.taxRates,
+                                        sgst: parseFloat(e.target.value) || undefined
+                                      }
+                                    }
+                                  }))}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">Split GST into CGST and SGST for intra-state transactions</p>
+                          </div>
+                        </div>
+                      </div>
+                      
                       <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-6">
                         <h4 className="text-md font-semibold text-red-800 mb-2">⚠️ Danger Zone</h4>
                         <p className="text-sm text-gray-600 mb-3">Reset all settings and master data to factory defaults</p>
@@ -1380,57 +2488,166 @@ export default function Home() {
         <section className="border border-gray-200 rounded-lg p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">1</span>
-            Customer Details
+            Client & Job Details
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Client Selector */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Existing Client (Optional)
+            </label>
+            <div className="flex space-x-2">
+              <select
+                value={selectedClientId}
+                onChange={e => selectClientForQuotation(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              >
+                <option value="">-- New Client / Enter Manually --</option>
+                {(masterData.clients || []).map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.clientName} {client.firmName ? `(${client.firmName})` : ''} - {client.phone}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setActiveTab('clients')}
+                onClickCapture={() => setSettingsOpen(true)}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm font-medium"
+              >
+                Manage Clients
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Client Name */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Customer Name *
+                Client Name *
               </label>
               <input
                 type="text"
-                value={quotation.customerName}
-                onChange={e => setQuotation(prev => ({ ...prev, customerName: e.target.value }))}
+                value={quotation.clientName}
+                onChange={e => setQuotation(prev => ({ 
+                  ...prev, 
+                  clientName: e.target.value,
+                  customerName: e.target.value // Keep legacy field in sync
+                }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                placeholder="Enter customer name"
+                placeholder="Enter client name"
               />
             </div>
+
+            {/* Firm Name */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Mobile Number *
+                Firm Name
+              </label>
+              <input
+                type="text"
+                value={quotation.firmName || ''}
+                onChange={e => setQuotation(prev => ({ ...prev, firmName: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                placeholder="Company / Firm name"
+              />
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Phone *
               </label>
               <input
                 type="tel"
-                value={quotation.mobileNumber}
-                onChange={e => setQuotation(prev => ({ ...prev, mobileNumber: e.target.value }))}
+                value={quotation.phone}
+                onChange={e => setQuotation(prev => ({ 
+                  ...prev, 
+                  phone: e.target.value,
+                  mobileNumber: e.target.value // Keep legacy field in sync
+                }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 placeholder="+91-XXXXXXXXXX"
               />
             </div>
+
+            {/* City */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Project Name *
+                City
               </label>
               <input
                 type="text"
-                value={quotation.projectName}
-                onChange={e => setQuotation(prev => ({ ...prev, projectName: e.target.value }))}
+                value={quotation.city || ''}
+                onChange={e => setQuotation(prev => ({ ...prev, city: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                placeholder="Enter project name"
+                placeholder="Enter city"
               />
             </div>
+
+            {/* Salesperson */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Date
+                Salesperson
+              </label>
+              <input
+                type="text"
+                value={quotation.salesperson || ''}
+                onChange={e => setQuotation(prev => ({ ...prev, salesperson: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                placeholder="Sales rep name"
+              />
+            </div>
+
+            {/* Job Reference ID */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Job Reference ID
+              </label>
+              <input
+                type="text"
+                value={quotation.jobReferenceId || quotation.projectName}
+                onChange={e => setQuotation(prev => ({ 
+                  ...prev, 
+                  jobReferenceId: e.target.value,
+                  projectName: e.target.value // Keep legacy field in sync
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                placeholder="e.g., JOB-2025-001"
+              />
+            </div>
+
+            {/* Quote Date */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Quote Date
               </label>
               <input
                 type="date"
-                value={quotation.date}
-                onChange={e => setQuotation(prev => ({ ...prev, date: e.target.value }))}
+                value={quotation.quoteDate}
+                onChange={e => setQuotation(prev => ({ 
+                  ...prev, 
+                  quoteDate: e.target.value,
+                  date: e.target.value // Keep legacy field in sync
+                }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               />
             </div>
-            <div className="md:col-span-2">
+
+            {/* Delivery Date */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Delivery Date (Optional)
+              </label>
+              <input
+                type="date"
+                value={quotation.deliveryDate || ''}
+                onChange={e => setQuotation(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              />
+            </div>
+
+            {/* Address */}
+            <div className="md:col-span-2 lg:col-span-3">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                 Address *
               </label>
@@ -1439,7 +2656,7 @@ export default function Home() {
                 onChange={e => setQuotation(prev => ({ ...prev, address: e.target.value }))}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                placeholder="Enter customer address"
+                placeholder="Enter client address"
               />
             </div>
           </div>
@@ -1449,10 +2666,13 @@ export default function Home() {
         <section className="border border-gray-200 rounded-lg p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">2</span>
-            Add Door Configuration
+            Add Door/Shutter Configuration
           </h2>
+          <p className="text-sm text-gray-600 mb-4 -mt-3">
+            Add multiple doors/shutters to this job. Each shutter can have different specifications.
+          </p>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {/* Door Input Form */}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1470,31 +2690,62 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Door Type
+                    Door Type *
                   </label>
                   <select
                     value={currentDoor.doorType}
                     onChange={e => setCurrentDoor(prev => ({ ...prev, doorType: e.target.value as any }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   >
-                    <option value="single">Single</option>
-                    <option value="double">Double</option>
-                    <option value="lift-up">Lift-up</option>
+                    <option value="openable">Openable</option>
                     <option value="sliding">Sliding</option>
-                    <option value="bi-fold">Bi-fold</option>
+                    <option value="air-hinge">Air Hinge</option>
+                    <option value="pin-hinge">Pin Hinge</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              {/* Profile Code */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Profile Code *
+                </label>
+                <select
+                  value={currentDoor.profileCode || currentDoor.frameProfileCode}
+                  onChange={e => {
+                    const newProfileCode = e.target.value;
+                    const newProfile = masterData.frameProfiles.find(fp => fp.code === newProfileCode);
+                    
+                    setCurrentDoor(prev => ({
+                      ...prev,
+                      profileCode: newProfileCode,
+                      frameProfileCode: newProfileCode, // Keep legacy in sync
+                      // Reset dependent fields to first suggested items
+                      handleProfileCode: newProfile?.suggestedHandles?.[0] || prev.handleProfileCode,
+                      glassTypeCode: newProfile?.suggestedGlassTypes?.[0] || prev.glassTypeCode,
+                      connectorCode: newProfile?.suggestedConnectors?.[0] || prev.connectorCode,
+                    }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                >
+                  {masterData.frameProfiles.map(profile => (
+                    <option key={profile.code} value={profile.code}>
+                      {profile.code} - {profile.name} ({profile.width}x{profile.height}mm)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dimensions */}
+              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Width *
+                    Width * (mm)
                   </label>
                   <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="1"
                     value={currentDoor.width || ''}
                     onChange={e => setCurrentDoor(prev => ({ ...prev, width: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
@@ -1502,12 +2753,12 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Height *
+                    Height * (mm)
                   </label>
                   <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="1"
                     value={currentDoor.height || ''}
                     onChange={e => setCurrentDoor(prev => ({ ...prev, height: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
@@ -1515,31 +2766,184 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Unit
+                    Thickness (mm)
                   </label>
-                  <select
-                    value={currentDoor.measurementUnit}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, measurementUnit: e.target.value as any }))}
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={currentDoor.thickness || ''}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, thickness: parseFloat(e.target.value) || undefined }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                  >
-                    <option value="mm">mm</option>
-                    <option value="inches">inches</option>
-                  </select>
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={currentDoor.quantity}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Frame Profile *
-                </label>
-                <select
-                  value={currentDoor.frameProfileCode}
-                  onChange={e => {
-                    const newFrameCode = e.target.value;
-                    const newFrame = masterData.frameProfiles.find(fp => fp.code === newFrameCode);
+              {/* Opening Direction - Only for applicable types */}
+              {(currentDoor.doorType === 'openable' || currentDoor.doorType === 'air-hinge' || currentDoor.doorType === 'pin-hinge') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Opening Direction
+                  </label>
+                  <select
+                    value={currentDoor.openingDirection}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, openingDirection: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  >
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Divider Requirements */}
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <div className="flex items-center mb-3">
+                  <input
+                    type="checkbox"
+                    id="hasDividers"
+                    checked={currentDoor.hasDividers}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, hasDividers: e.target.checked }))}
+                    className="mr-2 rounded"
+                  />
+                  <label htmlFor="hasDividers" className="text-sm font-medium text-gray-700">
+                    Divider Requirements? (if any)
+                  </label>
+                </div>
+                
+                {currentDoor.hasDividers && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Divider Profile</label>
+                        <select
+                          value={currentDoor.dividerProfileCode || ''}
+                          onChange={e => setCurrentDoor(prev => ({ ...prev, dividerProfileCode: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                        >
+                          <option value="">-- Select --</option>
+                          {(masterData.products || []).filter(p => p.productType === 'divider-profile').map(product => (
+                            <option key={product.code} value={product.code}>
+                              {product.code} - {product.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Divider Connector</label>
+                        <select
+                          value={currentDoor.dividerConnectorCode || ''}
+                          onChange={e => setCurrentDoor(prev => ({ ...prev, dividerConnectorCode: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                        >
+                          <option value="">-- Select --</option>
+                          {(masterData.products || []).filter(p => p.productType === 'divider-connector').map(product => (
+                            <option key={product.code} value={product.code}>
+                              {product.code} - {product.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     
-                    setCurrentDoor(prev => ({
-                      ...prev,
+                    <div className="bg-white p-3 rounded border border-gray-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-medium text-gray-700">Divider Mode</label>
+                        <button
+                          onClick={() => {
+                            const mode = currentDoor.dividerMode || masterData.dividerSettings.defaultMode;
+                            const widthMm = convertToMm(currentDoor.width, currentDoor.measurementUnit);
+                            const heightMm = convertToMm(currentDoor.height, currentDoor.measurementUnit);
+                            const config = calculateDividerPositions(
+                              widthMm,
+                              heightMm,
+                              mode,
+                              masterData.dividerSettings,
+                              mode === 'manual' ? currentDoor.dividerConfig : undefined
+                            );
+                            setCurrentDoor(prev => ({ ...prev, dividerConfig: config }));
+                          }}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          🔄 Apply Mode
+                        </button>
+                      </div>
+                      <select
+                        value={currentDoor.dividerMode || masterData.dividerSettings.defaultMode}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, dividerMode: e.target.value as DividerMode }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm mb-2"
+                      >
+                        <option value="fixed-offset">Fixed Offset (Predefined Positions)</option>
+                        <option value="equal-split">Equal Split (Divide into Sections)</option>
+                        <option value="manual">Manual Input (Custom Positions)</option>
+                      </select>
+                      
+                      {(currentDoor.dividerMode || masterData.dividerSettings.defaultMode) === 'manual' && (
+                        <button
+                          onClick={() => {
+                            const horizontal = prompt('Enter horizontal divider positions (comma-separated mm from top):');
+                            const vertical = prompt('Enter vertical divider positions (comma-separated mm from left):');
+                            if (horizontal !== null || vertical !== null) {
+                              setCurrentDoor(prev => ({
+                                ...prev,
+                                dividerConfig: {
+                                  horizontal: horizontal ? horizontal.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v)) : prev.dividerConfig?.horizontal || [],
+                                  vertical: vertical ? vertical.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v)) : prev.dividerConfig?.vertical || [],
+                                }
+                              }));
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                        >
+                          ✏️ Set Custom Positions
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="text-xs text-gray-700 bg-blue-50 p-3 rounded border border-blue-200">
+                      <p className="font-semibold mb-2">📐 Calculated Divider Positions:</p>
+                      <div className="font-mono text-xs bg-white p-2 rounded border border-blue-100">
+                        {currentDoor.dividerConfig ? formatDividerPositions(currentDoor.dividerConfig) : 'Click "Apply Mode" to calculate positions'}
+                      </div>
+                      {currentDoor.dividerConfig && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          <p>Door: {convertToMm(currentDoor.width, currentDoor.measurementUnit)}mm × {convertToMm(currentDoor.height, currentDoor.measurementUnit)}mm</p>
+                          <p>Mode: {(currentDoor.dividerMode || masterData.dividerSettings.defaultMode).replace('-', ' ').toUpperCase()}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Legacy fields section - keep for backward compatibility */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Frame Profile *
+                  </label>
+                  <select
+                    value={currentDoor.frameProfileCode}
+                    onChange={e => {
+                      const newFrameCode = e.target.value;
+                      const newFrame = masterData.frameProfiles.find(fp => fp.code === newFrameCode);
+                    
+                      setCurrentDoor(prev => ({
+                        ...prev,
                       frameProfileCode: newFrameCode,
                       // Reset to first suggested item or clear if not in suggestions
                       handleProfileCode: newFrame?.suggestedHandles?.length 
@@ -1635,7 +3039,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Quantity
@@ -1671,6 +3075,132 @@ export default function Home() {
                     onChange={e => setCurrentDoor(prev => ({ ...prev, carcassThickness: parseInt(e.target.value) || 18 }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
+                </div>
+              </div>
+
+              {/* Additional Hardware Selectors */}
+              <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Additional Hardware (Optional)</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Gasket */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Gasket</label>
+                    <select
+                      value={currentDoor.gasketCode || ''}
+                      onChange={e => setCurrentDoor(prev => ({ ...prev, gasketCode: e.target.value || undefined }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">-- None --</option>
+                      {(masterData.products || []).filter(p => p.productType === 'gasket').map(product => (
+                        <option key={product.code} value={product.code}>
+                          {product.code} - {product.name} - {formatCurrency(product.sellingPrice)}/m
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Lock */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Lock</label>
+                    <select
+                      value={currentDoor.lockCode || ''}
+                      onChange={e => setCurrentDoor(prev => ({ ...prev, lockCode: e.target.value || undefined }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                    >
+                      <option value="">-- None --</option>
+                      {(masterData.products || []).filter(p => p.productType === 'lock').map(product => (
+                        <option key={product.code} value={product.code}>
+                          {product.code} - {product.name} - {formatCurrency(product.sellingPrice)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Hinge - Only for openable/pin-hinge */}
+                  {(currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge') && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Hinge Type</label>
+                      <select
+                        value={currentDoor.hingeCode || ''}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, hingeCode: e.target.value || undefined }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      >
+                        <option value="">-- Select --</option>
+                        {(masterData.products || []).filter(p => p.productType === 'hinge').map(product => (
+                          <option key={product.code} value={product.code}>
+                            {product.code} - {product.name} - {formatCurrency(product.sellingPrice)}/unit
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Sliding System - Only for sliding */}
+                  {currentDoor.doorType === 'sliding' && (
+                    <div className="col-span-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-medium text-gray-700">Sliding System Bundle</label>
+                        {currentDoor.width > 0 && currentDoor.height > 0 && (
+                          <button
+                            onClick={() => {
+                              const glassType = masterData.glassTypes.find(g => g.code === currentDoor.glassTypeCode);
+                              const glassThickness = glassType?.thickness || 5;
+                              const recommended = autoSelectSlidingBundle(
+                                currentDoor.width,
+                                currentDoor.height,
+                                glassThickness,
+                                currentDoor.quantity
+                              );
+                              if (recommended) {
+                                setCurrentDoor(prev => ({ ...prev, slidingSystemCode: recommended.code }));
+                                alert(`Auto-selected: ${recommended.name}\nMax Weight: ${recommended.maxDoorWeight}kg\n${recommended.hasSoftClose ? 'With Soft Close' : 'Standard'}`);
+                              } else {
+                                alert('No suitable sliding bundle found for this door size. Please add a bundle with higher weight capacity in Settings.');
+                              }
+                            }}
+                            className="text-xs bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                          >
+                            🔄 Auto-Select
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={currentDoor.slidingSystemCode || ''}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, slidingSystemCode: e.target.value || undefined }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                      >
+                        <option value="">-- Select Bundle --</option>
+                        {(masterData.slidingBundles || []).map(bundle => (
+                          <option key={bundle.code} value={bundle.code}>
+                            {bundle.code} - {bundle.name} (Max: {bundle.maxDoorWeight}kg) - {formatCurrency(bundle.sellingPrice)}
+                          </option>
+                        ))}
+                      </select>
+                      {currentDoor.slidingSystemCode && (() => {
+                        const selectedBundle = (masterData.slidingBundles || []).find(b => b.code === currentDoor.slidingSystemCode);
+                        return selectedBundle ? (
+                          <div className="mt-2 text-xs bg-gray-50 p-2 rounded border border-gray-200">
+                            <div className="font-semibold text-gray-700 mb-1">Bundle Includes:</div>
+                            <ul className="list-disc list-inside text-gray-600 space-y-0.5">
+                              {selectedBundle.components.map((comp, idx) => (
+                                <li key={idx}>{comp.name} ({comp.quantity}x) - {comp.description}</li>
+                              ))}
+                            </ul>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
+                                {selectedBundle.mountingType}
+                              </span>
+                              {selectedBundle.hasSoftClose && (
+                                <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">
+                                  Soft Close
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1718,81 +3248,232 @@ export default function Home() {
                 + Add Door
               </button>
 
-              {/* Calculated Preview Fields */}
+              {/* Comprehensive Auto-Calculated Preview */}
               {currentDoor.width > 0 && currentDoor.height > 0 && (
-                <div className="grid grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Frame Qty (m)
-                    </label>
-                    <input
-                      type="text"
-                      value={(calculateCuttingScheme(currentDoor).totalFrameLength / 1000).toFixed(2)}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Handle Qty (m)
-                    </label>
-                    <input
-                      type="text"
-                      value={(calculateCuttingScheme(currentDoor).totalHandleLength / 1000).toFixed(2)}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Glass (S.ft)
-                    </label>
-                    <input
-                      type="text"
-                      value={(() => {
-                        const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
-                        return calc.glassAreaWithWastage.toFixed(2);
-                      })()}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Glass Cost
-                    </label>
-                    <input
-                      type="text"
-                      value={formatCurrency(calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).glassCost)}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Hardware Cost
-                    </label>
-                    <input
-                      type="text"
-                      value={formatCurrency(
-                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).frameCost +
-                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).handleCost +
-                        calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).connectorCost
-                      )}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Final Cost
-                    </label>
-                    <input
-                      type="text"
-                      value={formatCurrency(calculateDoorCosts(currentDoor, quotation.glassWastagePercentage).totalCost * currentDoor.quantity)}
-                      readOnly
-                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-gray-700 font-semibold"
-                    />
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 p-5 rounded-lg border-2 border-green-300">
+                  <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
+                    <span className="bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center mr-2 text-xs">✓</span>
+                    AUTO-CALCULATED VALUES
+                  </h4>
+                  
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* Profile Length */}
+                    <div className="bg-white p-3 rounded shadow-sm">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Total Profile Length</label>
+                      <div className="text-lg font-bold text-gray-900">
+                        {(() => {
+                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          return calc.totalProfileLength.toFixed(2);
+                        })()}m
+                      </div>
+                    </div>
+
+                    {/* Connectors Required */}
+                    <div className="bg-white p-3 rounded shadow-sm">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Connectors Required</label>
+                      <div className="text-lg font-bold text-gray-900">
+                        {(() => {
+                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          return calc.connectorsRequired;
+                        })()} units
+                      </div>
+                    </div>
+
+                    {/* Hinge Count - Only for openable/pin-hinge */}
+                    {(currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge') && (
+                      <div className="bg-white p-3 rounded shadow-sm">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Count</label>
+                        <div className="text-lg font-bold text-gray-900">
+                          {(() => {
+                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            return calc.hingeCount || 0;
+                          })()} units
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hinge Positions - Only for openable/pin-hinge */}
+                    {(currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge') && (
+                      <div className="bg-white p-3 rounded shadow-sm col-span-3">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Positions (mm from top)</label>
+                        <div className="text-sm font-bold text-gray-900">
+                          {(() => {
+                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            return (calc.hingePositions || []).join('mm, ') + 'mm';
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Handle Length */}
+                    {currentDoor.hasHandle && currentDoor.handleProfileCode && (
+                      <div className="bg-white p-3 rounded shadow-sm">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Handle Length</label>
+                        <div className="text-lg font-bold text-gray-900">
+                          {(() => {
+                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            return (calc.totalHandleLength || 0).toFixed(2);
+                          })()}m
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Divider Length */}
+                    {currentDoor.hasDividers && currentDoor.dividerConfig && (
+                      <>
+                        <div className="bg-white p-3 rounded shadow-sm">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Length</label>
+                          <div className="text-lg font-bold text-gray-900">
+                            {(() => {
+                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              return (calc.dividerLength || 0).toFixed(2);
+                            })()}m
+                          </div>
+                        </div>
+                        <div className="bg-white p-3 rounded shadow-sm">
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Connectors</label>
+                          <div className="text-lg font-bold text-gray-900">
+                            {(() => {
+                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              return calc.dividerConnectorsRequired || 0;
+                            })()} units
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Glass Area */}
+                    <div className="bg-white p-3 rounded shadow-sm">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Glass Area (with wastage)</label>
+                      <div className="text-lg font-bold text-gray-900">
+                        {(() => {
+                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          return calc.glassAreaWithWastage.toFixed(2);
+                        })()} sqft
+                      </div>
+                    </div>
+
+                    {/* Cost Breakdown */}
+                    <div className="bg-blue-100 p-3 rounded shadow-sm col-span-3 border border-blue-300">
+                      <label className="block text-xs font-semibold text-blue-800 mb-2">COST BREAKDOWN (Per Unit)</label>
+                      <div className="grid grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-600">Frame:</span>
+                          <span className="font-bold text-gray-900 ml-1">
+                            {formatCurrency((() => {
+                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              return calc.frameCost / currentDoor.quantity;
+                            })())}
+                          </span>
+                        </div>
+                        {currentDoor.hasHandle && (
+                          <div>
+                            <span className="text-gray-600">Handle:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.handleCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-gray-600">Glass:</span>
+                          <span className="font-bold text-gray-900 ml-1">
+                            {formatCurrency((() => {
+                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              return calc.glassCost / currentDoor.quantity;
+                            })())}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Connectors:</span>
+                          <span className="font-bold text-gray-900 ml-1">
+                            {formatCurrency((() => {
+                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              return calc.connectorCost / currentDoor.quantity;
+                            })())}
+                          </span>
+                        </div>
+                        {(currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge') && currentDoor.hingeCode && (
+                          <div>
+                            <span className="text-gray-600">Hinges:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.hingeCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                        {currentDoor.hasDividers && (
+                          <div>
+                            <span className="text-gray-600">Dividers:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.dividerCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                        {currentDoor.gasketCode && (
+                          <div>
+                            <span className="text-gray-600">Gasket:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.gasketCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                        {currentDoor.lockCode && (
+                          <div>
+                            <span className="text-gray-600">Lock:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.lockCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                        {currentDoor.doorType === 'sliding' && currentDoor.slidingSystemCode && (
+                          <div>
+                            <span className="text-gray-600">Sliding System:</span>
+                            <span className="font-bold text-gray-900 ml-1">
+                              {formatCurrency((() => {
+                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                return calc.slidingSystemCost / currentDoor.quantity;
+                              })())}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Selling Price Per Unit */}
+                    <div className="bg-gradient-to-r from-amber-100 to-orange-100 p-4 rounded shadow-md col-span-2 border-2 border-amber-400">
+                      <label className="block text-sm font-bold text-amber-900 mb-1">Total Selling Price (Per Unit)</label>
+                      <div className="text-2xl font-black text-amber-900">
+                        {formatCurrency((() => {
+                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          return calc.totalSellingPrice;
+                        })())}
+                      </div>
+                    </div>
+
+                    {/* Total Order Value */}
+                    <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded shadow-md border-2 border-green-500">
+                      <label className="block text-sm font-bold text-green-900 mb-1">Total Order Value (×{currentDoor.quantity})</label>
+                      <div className="text-2xl font-black text-green-900">
+                        {formatCurrency((() => {
+                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          return calc.totalOrderValue;
+                        })())}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1853,6 +3534,7 @@ export default function Home() {
               </div>
             </div>
           )}
+          </div>
         </section>
 
         {/* Connectors & Lift Configuration */}
@@ -2238,52 +3920,134 @@ export default function Home() {
               Cost Summary
             </h2>
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-300">
-              <div className="space-y-3">
-                <div className="flex justify-between text-gray-700">
-                  <span>Hardware Cost:</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.totalHardwareCost)}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>Glass Cost:</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.totalGlassCost)}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>Additional Components:</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.totalAdditionalCost)}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>Optional Items:</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.totalOptionalCost)}</span>
-                </div>
-                <hr className="border-gray-300" />
-                <div className="flex justify-between text-gray-800 font-semibold">
-                  <span>Subtotal:</span>
-                  <span>{formatCurrency(costSummary.subtotal)}</span>
-                </div>
-                {costSummary.discount > 0 && (
-                  <div className="flex justify-between text-gray-600">
-                    <span>Discount ({quotation.globalDiscount}%):</span>
-                    <span>- {formatCurrency(costSummary.discount)}</span>
+              <div className="space-y-4">
+                {/* Component-wise breakdown */}
+                <div className="bg-white rounded p-4 border border-gray-200">
+                  <h3 className="font-semibold text-gray-800 mb-3 text-sm">Material Breakdown</h3>
+                  <div className="space-y-2 text-sm">
+                    {costSummary.totalProfileCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Profile/Frame (per meter):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalProfileCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalHandleCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Handles (per meter):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalHandleCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalGlassCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Glass (per sq ft):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalGlassCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalConnectorCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Connectors (per unit):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalConnectorCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalHingeCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Hinges (per unit):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalHingeCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalLockCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Locks (per unit):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalLockCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalGasketCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Gaskets (per meter):</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalGasketCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalSlidingSystemCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Sliding System:</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalSlidingSystemCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalDividerCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Dividers & Connectors:</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalDividerCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalAdditionalCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Additional Components:</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalAdditionalCost)}</span>
+                      </div>
+                    )}
+                    {costSummary.totalOptionalCost > 0 && (
+                      <div className="flex justify-between text-gray-700">
+                        <span>Optional Items:</span>
+                        <span className="font-medium">{formatCurrency(costSummary.totalOptionalCost)}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className="flex justify-between text-gray-700">
-                  <span>Taxable Amount:</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.taxableAmount)}</span>
                 </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>GST ({quotation.gstPercentage}%):</span>
-                  <span className="font-semibold">{formatCurrency(costSummary.gstAmount)}</span>
-                </div>
-                <hr className="border-gray-400" />
-                <div className="flex justify-between text-xl font-bold text-black">
-                  <span>FINAL AMOUNT:</span>
-                  <span>{formatCurrency(costSummary.finalAmount)}</span>
-                </div>
-                {costSummary.totalSavings > 0 && (
-                  <div className="text-center text-gray-700 font-semibold mt-2">
-                    You save {formatCurrency(costSummary.totalSavings)}!
+                
+                {/* Calculation stages */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-gray-800 font-semibold">
+                    <span>Material Subtotal:</span>
+                    <span>{formatCurrency(costSummary.materialSubtotal)}</span>
                   </div>
-                )}
+                  {costSummary.makingCharges > 0 && (
+                    <div className="flex justify-between text-blue-700 font-medium">
+                      <span>Making Charges ({masterData.pricingSettings.makingChargeType === 'fixed' ? '₹' : `${masterData.pricingSettings.makingChargeValue}%`}):</span>
+                      <span>+ {formatCurrency(costSummary.makingCharges)}</span>
+                    </div>
+                  )}
+                  <hr className="border-gray-300" />
+                  <div className="flex justify-between text-gray-800 font-semibold">
+                    <span>Subtotal (with Making):</span>
+                    <span>{formatCurrency(costSummary.subtotalWithMaking)}</span>
+                  </div>
+                  {costSummary.discount > 0 && (
+                    <div className="flex justify-between text-green-600 font-medium">
+                      <span>Discount ({quotation.globalDiscount}%):</span>
+                      <span>- {formatCurrency(costSummary.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-gray-700">
+                    <span>Taxable Amount:</span>
+                    <span className="font-semibold">{formatCurrency(costSummary.taxableAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-700">
+                    <span>GST ({quotation.gstPercentage}%):</span>
+                    <span className="font-semibold">{formatCurrency(costSummary.gstAmount)}</span>
+                  </div>
+                  {masterData.pricingSettings.taxRates.cgst && masterData.pricingSettings.taxRates.sgst && (
+                    <div className="text-xs text-gray-500 ml-4">
+                      <div className="flex justify-between">
+                        <span>• CGST ({masterData.pricingSettings.taxRates.cgst}%):</span>
+                        <span>{formatCurrency(costSummary.gstAmount / 2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• SGST ({masterData.pricingSettings.taxRates.sgst}%):</span>
+                        <span>{formatCurrency(costSummary.gstAmount / 2)}</span>
+                      </div>
+                    </div>
+                  )}
+                  <hr className="border-gray-400" />
+                  <div className="flex justify-between text-xl font-bold text-black">
+                    <span>FINAL AMOUNT:</span>
+                    <span>{formatCurrency(costSummary.finalAmount)}</span>
+                  </div>
+                  {costSummary.totalSavings > 0 && (
+                    <div className="text-center text-green-700 font-semibold mt-2 bg-green-50 p-2 rounded">
+                      🎉 You save {formatCurrency(costSummary.totalSavings)}!
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </section>

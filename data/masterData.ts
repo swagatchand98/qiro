@@ -1,4 +1,4 @@
-import { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product } from '../types';
+import { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, SlidingBundle } from '../types';
 
 export const frameProfiles: FrameProfile[] = [
   {
@@ -397,12 +397,121 @@ export const products: Product[] = [
   },
 ];
 
+export const slidingBundles: SlidingBundle[] = [
+  {
+    code: 'SL-50-STD',
+    name: '50kg Standard System',
+    maxDoorWeight: 50,
+    mountingType: 'top-hung',
+    hasSoftClose: false,
+    components: [
+      { name: 'Aluminum Track', description: '2m track for sliding door', quantity: 1 },
+      { name: 'Rollers', description: 'Heavy duty rollers', quantity: 2 },
+      { name: 'Bottom Guide', description: 'Floor guide', quantity: 1 },
+      { name: 'End Stoppers', description: 'Track end caps', quantity: 2 },
+      { name: 'Cover Caps', description: 'Decorative covers', quantity: 4 },
+      { name: 'Screws & Fixings', description: 'Complete hardware set', quantity: 1 },
+    ],
+    costPrice: 1500,
+    sellingPrice: 2200,
+    pricePerMeter: 1100,
+    pricePerDoor: 2200,
+    createdDate: new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    code: 'SL-80-SC',
+    name: '80kg Soft Close System',
+    maxDoorWeight: 80,
+    mountingType: 'top-hung',
+    hasSoftClose: true,
+    components: [
+      { name: 'Aluminum Track', description: '2m premium track', quantity: 1 },
+      { name: 'Heavy Duty Rollers', description: 'Ball bearing rollers', quantity: 2 },
+      { name: 'Soft Close Units', description: 'Hydraulic dampeners', quantity: 2 },
+      { name: 'Bottom Guide', description: 'Premium floor guide', quantity: 1 },
+      { name: 'End Stoppers', description: 'Cushioned stoppers', quantity: 2 },
+      { name: 'Cover Caps', description: 'Premium covers', quantity: 4 },
+      { name: 'Screws & Fixings', description: 'Complete hardware set', quantity: 1 },
+    ],
+    costPrice: 3200,
+    sellingPrice: 4500,
+    pricePerMeter: 2250,
+    pricePerDoor: 4500,
+    createdDate: new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    code: 'SL-120-SC',
+    name: '120kg Heavy Duty Soft Close',
+    maxDoorWeight: 120,
+    mountingType: 'top-hung',
+    hasSoftClose: true,
+    components: [
+      { name: 'Heavy Duty Track', description: '2m reinforced track', quantity: 1 },
+      { name: 'Industrial Rollers', description: 'Heavy load rollers', quantity: 2 },
+      { name: 'Soft Close Units', description: 'Heavy duty dampeners', quantity: 2 },
+      { name: 'Steel Bottom Guide', description: 'Reinforced guide', quantity: 1 },
+      { name: 'End Stoppers', description: 'Industrial stoppers', quantity: 2 },
+      { name: 'Cover Caps', description: 'Premium covers', quantity: 4 },
+      { name: 'Screws & Fixings', description: 'Heavy duty hardware', quantity: 1 },
+    ],
+    costPrice: 5500,
+    sellingPrice: 7500,
+    pricePerMeter: 3750,
+    pricePerDoor: 7500,
+    createdDate: new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
+  },
+  {
+    code: 'SL-100-BR',
+    name: '100kg Bottom Rolling System',
+    maxDoorWeight: 100,
+    mountingType: 'bottom-rolling',
+    hasSoftClose: false,
+    components: [
+      { name: 'Floor Track', description: '2m bottom track', quantity: 1 },
+      { name: 'Bottom Rollers', description: 'Heavy duty wheels', quantity: 2 },
+      { name: 'Top Guide', description: 'Ceiling guide rail', quantity: 1 },
+      { name: 'End Stoppers', description: 'Track stoppers', quantity: 2 },
+      { name: 'Cover Plates', description: 'Floor covers', quantity: 2 },
+      { name: 'Screws & Fixings', description: 'Complete hardware set', quantity: 1 },
+    ],
+    costPrice: 2800,
+    sellingPrice: 4000,
+    pricePerMeter: 2000,
+    pricePerDoor: 4000,
+    createdDate: new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
+  },
+];
+
 export const masterData: MasterData = {
   frameProfiles,
   handleProfiles,
   glassTypes,
   connectorTypes,
   products,
+  clients: [],
+  jobs: [],
+  slidingBundles,
+  dividerSettings: {
+    defaultMode: 'fixed-offset',
+    fixedOffsetHorizontal: [900, 1800], // Default positions in mm from top
+    fixedOffsetVertical: [900], // Default positions in mm from left
+    equalSplitHorizontalCount: 2, // Split into 2 sections
+    equalSplitVerticalCount: 1, // No vertical split by default
+  },
+  pricingSettings: {
+    makingChargeType: 'percentage', // 'fixed' (₹) or 'percentage' (%)
+    makingChargeValue: 15, // 15% of material cost or ₹ amount
+    defaultDiscount: 0, // Default discount percentage
+    taxRates: {
+      gst: 18, // GST percentage
+      cgst: 9, // Central GST (optional)
+      sgst: 9, // State GST (optional)
+    },
+  },
   defaultGST: 18,
   defaultGlassWastage: 10,
 };

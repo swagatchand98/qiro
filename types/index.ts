@@ -71,31 +71,68 @@ export interface ConnectorType {
 }
 
 export type MeasurementUnit = 'mm' | 'inches';
-export type DoorType = 'single' | 'double' | 'lift-up' | 'sliding' | 'bi-fold';
+export type DoorType = 'openable' | 'sliding' | 'air-hinge' | 'pin-hinge';
 export type HandlePosition = 'left' | 'right' | 'center' | 'none';
 export type HingePosition = 'left' | 'right' | 'top' | 'bottom';
+export type OpeningDirection = 'left' | 'right' | 'both' | 'none';
+
+export interface DividerConfig {
+  horizontal: number[]; // Y positions in mm
+  vertical: number[];   // X positions in mm
+}
 
 export interface DoorConfiguration {
   id: string;
   doorName: string;
-  doorType: DoorType;
+  
+  // Door Type & Profile
+  doorType: DoorType; // 'openable' | 'sliding' | 'air-hinge' | 'pin-hinge'
+  profileCode: string; // Main profile/frame code
+  
+  // Dimensions
   measurementUnit: MeasurementUnit;
-  height: number;
-  width: number;
+  width: number;  // mm
+  height: number; // mm
+  thickness?: number; // mm (optional)
   quantity: number;
-  handlePosition: HandlePosition;
-  handleOffset: number;
-  hingePosition: HingePosition;
-  hingeCode: string;
-  hingeQuantity: number;
-  carcassThickness: number;
-  frameProfileCode: string;
-  handleProfileCode?: string;
-  glassTypeCode: string;
+  
+  // Handle Configuration
+  hasHandle: boolean; // Yes/No
+  handleProfileCode?: string; // Handle type (if hasHandle)
+  handlePosition: HandlePosition; // left/right/center/none
+  handleOffset?: number; // mm from edge
+  
+  // Opening Direction (for applicable types)
+  openingDirection: OpeningDirection; // 'left' | 'right' | 'both' | 'none'
+  
+  // Divider Configuration
+  hasDividers: boolean;
+  dividerMode?: DividerMode; // Fixed-offset, equal-split, or manual
+  dividerConfig?: DividerConfig; // Horizontal & vertical positions
+  dividerProfileCode?: string;
+  dividerConnectorCode?: string;
+  
+  // Hardware (auto-calculated but can override)
+  hingePosition?: HingePosition;
+  hingeCode?: string;
+  hingeQuantity?: number; // Auto-calculated for openable
+  hingePositionMm?: number[]; // Array of hinge positions from top
+  
+  // Connectors (auto-calculated)
   connectorCode?: string;
-  connectorQuantity: number;
-  liftAvailable: boolean;
+  connectorQuantity?: number; // Auto-calculated based on corners
+  
+  // Additional Components
+  gasketCode?: string;
+  lockCode?: string;
+  slidingSystemCode?: string; // For sliding type
+  glassTypeCode?: string;
+  
+  // Legacy fields for backward compatibility
+  carcassThickness?: number;
+  liftAvailable?: boolean;
   referenceImage?: string;
+  frameProfileCode?: string; // Maps to profileCode
 }
 
 export interface CuttingScheme {
@@ -108,14 +145,46 @@ export interface CuttingScheme {
 
 export interface DoorCalculation {
   doorId: string;
+  
+  // Profile/Frame Calculations
+  totalProfileLength: number; // meters
   frameCost: number;
+  
+  // Handle Calculations
+  totalHandleLength?: number; // meters
   handleCost: number;
-  glassCost: number;
-  connectorCost: number;
+  
+  // Glass Calculations
   glassArea: number; // sqft
   glassAreaWithWastage: number; // sqft
+  glassCost: number;
+  
+  // Connector Calculations
+  connectorsRequired: number;
+  connectorCost: number;
+  
+  // Hinge Calculations (for openable)
+  hingeCount?: number;
+  hingePositions?: number[]; // mm from top
+  hingeCost: number;
+  
+  // Divider Calculations
+  dividerLength?: number; // meters
+  dividerConnectorsRequired?: number;
+  dividerCost: number;
+  
+  // Additional Hardware
+  gasketCost: number;
+  lockCost: number;
+  slidingSystemCost: number;
+  
+  // Cutting Scheme
   cuttingScheme: CuttingScheme;
-  totalCost: number;
+  
+  // Totals
+  totalSellingPrice: number; // Per unit
+  totalOrderValue: number;   // totalSellingPrice * quantity
+  totalCost: number; // Legacy field
 }
 
 export interface AdditionalComponent {
@@ -136,13 +205,81 @@ export interface OptionalItem {
   total: number;
 }
 
+export interface Client {
+  id: string;
+  clientName: string;
+  firmName?: string;
+  phone: string;
+  city?: string;
+  address?: string;
+  email?: string;
+  createdDate: string;
+  lastUpdated: string;
+}
+
+export interface Job {
+  id: string;
+  jobReferenceId: string; // User-friendly job reference
+  clientId: string;
+  clientName: string; // Denormalized for quick access
+  firmName?: string;
+  salesperson?: string;
+  quoteDate: string;
+  deliveryDate?: string;
+  status: 'draft' | 'quoted' | 'approved' | 'in-production' | 'completed' | 'cancelled';
+  createdDate: string;
+  lastUpdated: string;
+}
+
+export interface SlidingBundleComponent {
+  name: string;
+  description: string;
+  quantity: number; // Quantity per door
+}
+
+export interface SlidingBundle {
+  code: string; // e.g., SL-80-SC
+  name: string; // e.g., "80kg Soft Close System"
+  maxDoorWeight: number; // kg
+  mountingType: 'top-hung' | 'bottom-rolling' | 'side-hung';
+  hasSoftClose: boolean;
+  components: SlidingBundleComponent[]; // Track, rollers, guides, etc.
+  costPrice: number; // Hidden from staff
+  sellingPrice: number; // Dealer price
+  pricePerMeter?: number; // For track-based pricing
+  pricePerDoor?: number; // For door-based pricing
+  imageUrl?: string;
+  notes?: string;
+  createdDate: string;
+  lastUpdated: string;
+}
+
 export interface QuotationData {
   id: string;
-  customerName: string;
-  mobileNumber: string;
+  // Job Information
+  jobId?: string;
+  jobReferenceId?: string;
+  
+  // Client Information
+  clientId?: string;
+  clientName: string;
+  firmName?: string;
+  phone: string;
+  city?: string;
   address: string;
-  projectName: string;
-  date: string;
+  
+  // Job Details
+  salesperson?: string;
+  quoteDate: string; // Renamed from 'date'
+  deliveryDate?: string;
+  
+  // Legacy field for backward compatibility
+  customerName: string; // Maps to clientName
+  mobileNumber: string; // Maps to phone
+  date: string; // Maps to quoteDate
+  projectName: string; // Can be used as job reference
+  
+  // Doors/Shutters (multiple shutters per job)
   doors: DoorConfiguration[];
   additionalComponents: AdditionalComponent[];
   optionalItems: OptionalItem[];
@@ -152,16 +289,55 @@ export interface QuotationData {
 }
 
 export interface CostSummary {
-  totalHardwareCost: number;
-  totalGlassCost: number;
-  totalAdditionalCost: number;
-  totalOptionalCost: number;
-  subtotal: number;
-  discount: number;
-  taxableAmount: number;
-  gstAmount: number;
-  finalAmount: number;
-  totalSavings: number;
+  // Component-wise breakdown
+  totalProfileCost: number; // Frame profiles (per meter)
+  totalHandleCost: number; // Handles (per meter)
+  totalGlassCost: number; // Glass (per sq ft)
+  totalConnectorCost: number; // Connectors (per unit)
+  totalHingeCost: number; // Hinges (per unit)
+  totalLockCost: number; // Locks (per unit)
+  totalGasketCost: number; // Gaskets (per meter)
+  totalSlidingSystemCost: number; // Sliding kits
+  totalDividerCost: number; // Divider profiles & connectors
+  totalAdditionalCost: number; // Additional components
+  totalOptionalCost: number; // Optional items
+  
+  // Calculation stages
+  materialSubtotal: number; // Sum of all materials
+  makingCharges: number; // Making/fabrication charges
+  subtotalWithMaking: number; // Material + Making
+  discount: number; // Discount amount
+  taxableAmount: number; // After discount
+  gstAmount: number; // GST on taxable amount
+  finalAmount: number; // Final invoice amount
+  
+  // Legacy fields for backward compatibility
+  totalHardwareCost: number; // Sum of profiles, handles, connectors, etc.
+  subtotal: number; // Same as materialSubtotal
+  totalSavings: number; // Discount amount
+}
+
+export type DividerMode = 'fixed-offset' | 'equal-split' | 'manual';
+
+export interface DividerSettings {
+  defaultMode: DividerMode;
+  fixedOffsetHorizontal: number[]; // Positions in mm from top, e.g., [900, 1800]
+  fixedOffsetVertical: number[]; // Positions in mm from left
+  equalSplitHorizontalCount: number; // Number of horizontal divisions
+  equalSplitVerticalCount: number; // Number of vertical divisions
+}
+
+export type MakingChargeType = 'fixed' | 'percentage';
+
+export interface PricingSettings {
+  makingChargeType: MakingChargeType; // 'fixed' (₹) or 'percentage' (%)
+  makingChargeValue: number; // Amount in ₹ or percentage value
+  defaultDiscount: number; // Default discount percentage
+  taxRates: {
+    gst: number; // GST percentage (e.g., 18)
+    cgst?: number; // Central GST (optional, for split GST)
+    sgst?: number; // State GST (optional, for split GST)
+  };
 }
 
 export interface MasterData {
@@ -170,6 +346,11 @@ export interface MasterData {
   glassTypes: GlassType[];
   connectorTypes: ConnectorType[];
   products: Product[]; // New comprehensive product system
+  clients: Client[]; // Customer database
+  jobs: Job[]; // Job tracking
+  slidingBundles: SlidingBundle[]; // Sliding system bundles
+  dividerSettings: DividerSettings; // Divider configuration
+  pricingSettings: PricingSettings; // Pricing & charges configuration
   defaultGST: number;
   defaultGlassWastage: number;
 }

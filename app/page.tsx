@@ -98,6 +98,36 @@ export default function Home() {
     return calculateCostSummary(quotation, doorCalculations);
   }, [quotation, doorCalculations]);
 
+  // Get filtered options based on selected frame profile
+  const filteredOptions = useMemo(() => {
+    const selectedFrame = masterData.frameProfiles.find(
+      fp => fp.code === currentDoor.frameProfileCode
+    );
+    
+    if (!selectedFrame) {
+      return {
+        handles: masterData.handleProfiles,
+        glassTypes: masterData.glassTypes,
+        connectors: masterData.connectorTypes,
+      };
+    }
+
+    // Filter based on suggested items, fallback to all if no suggestions
+    const handles = selectedFrame.suggestedHandles?.length
+      ? masterData.handleProfiles.filter(h => selectedFrame.suggestedHandles?.includes(h.code))
+      : masterData.handleProfiles;
+    
+    const glassTypes = selectedFrame.suggestedGlassTypes?.length
+      ? masterData.glassTypes.filter(g => selectedFrame.suggestedGlassTypes?.includes(g.code))
+      : masterData.glassTypes;
+    
+    const connectors = selectedFrame.suggestedConnectors?.length
+      ? masterData.connectorTypes.filter(c => selectedFrame.suggestedConnectors?.includes(c.code))
+      : masterData.connectorTypes;
+
+    return { handles, glassTypes, connectors };
+  }, [currentDoor.frameProfileCode, masterData]);
+
   // Auto-save to localStorage
   useEffect(() => {
     if (quotation.customerName && quotation.doors.length > 0) {
@@ -473,6 +503,68 @@ export default function Home() {
                               )}
                             </div>
                           </div>
+                          
+                          {/* Suggested Items Configuration */}
+                          <div className="mt-4 pt-4 border-t border-gray-300">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">Suggested Items for this Frame</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Suggested Handles</label>
+                                <select
+                                  multiple
+                                  size={4}
+                                  value={profile.suggestedHandles || []}
+                                  onChange={e => {
+                                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                                    updateFrameProfile(index, { ...profile, suggestedHandles: selected });
+                                  }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded-lg text-xs"
+                                >
+                                  {masterData.handleProfiles.map(h => (
+                                    <option key={h.code} value={h.code}>{h.name}</option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Suggested Glass Types</label>
+                                <select
+                                  multiple
+                                  size={4}
+                                  value={profile.suggestedGlassTypes || []}
+                                  onChange={e => {
+                                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                                    updateFrameProfile(index, { ...profile, suggestedGlassTypes: selected });
+                                  }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded-lg text-xs"
+                                >
+                                  {masterData.glassTypes.map(g => (
+                                    <option key={g.code} value={g.code}>{g.name}</option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Suggested Connectors</label>
+                                <select
+                                  multiple
+                                  size={4}
+                                  value={profile.suggestedConnectors || []}
+                                  onChange={e => {
+                                    const selected = Array.from(e.target.selectedOptions, option => option.value);
+                                    updateFrameProfile(index, { ...profile, suggestedConnectors: selected });
+                                  }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded-lg text-xs"
+                                >
+                                  {masterData.connectorTypes.map(c => (
+                                    <option key={c.code} value={c.code}>{c.name}</option>
+                                  ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                              </div>
+                            </div>
+                          </div>
+                          
                           <div className="mt-3">
                             <button
                               onClick={() => deleteFrameProfile(index)}
@@ -977,7 +1069,25 @@ export default function Home() {
                 </label>
                 <select
                   value={currentDoor.frameProfileCode}
-                  onChange={e => setCurrentDoor(prev => ({ ...prev, frameProfileCode: e.target.value }))}
+                  onChange={e => {
+                    const newFrameCode = e.target.value;
+                    const newFrame = masterData.frameProfiles.find(fp => fp.code === newFrameCode);
+                    
+                    setCurrentDoor(prev => ({
+                      ...prev,
+                      frameProfileCode: newFrameCode,
+                      // Reset to first suggested item or clear if not in suggestions
+                      handleProfileCode: newFrame?.suggestedHandles?.length 
+                        ? newFrame.suggestedHandles[0] 
+                        : undefined,
+                      glassTypeCode: newFrame?.suggestedGlassTypes?.length
+                        ? newFrame.suggestedGlassTypes[0]
+                        : masterData.glassTypes[0]?.code,
+                      connectorCode: newFrame?.suggestedConnectors?.length
+                        ? newFrame.suggestedConnectors[0]
+                        : masterData.connectorTypes[0]?.code,
+                    }));
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 >
                   {masterData.frameProfiles.map(profile => (
@@ -990,14 +1100,16 @@ export default function Home() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Glass Type *
+                  Glass Type * {filteredOptions.glassTypes.length < masterData.glassTypes.length && (
+                    <span className="text-xs text-gray-500">(filtered by frame)</span>
+                  )}
                 </label>
                 <select
                   value={currentDoor.glassTypeCode}
                   onChange={e => setCurrentDoor(prev => ({ ...prev, glassTypeCode: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 >
-                  {masterData.glassTypes.map(glass => (
+                  {filteredOptions.glassTypes.map(glass => (
                     <option key={glass.code} value={glass.code}>
                       {glass.name} - {formatCurrency(glass.pricePerSqFt)}/sqft
                     </option>
@@ -1007,7 +1119,9 @@ export default function Home() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Handle Profile (Optional)
+                  Handle Profile (Optional) {filteredOptions.handles.length < masterData.handleProfiles.length && (
+                    <span className="text-xs text-gray-500">(filtered by frame)</span>
+                  )}
                 </label>
                 <select
                   value={currentDoor.handleProfileCode || ''}
@@ -1015,7 +1129,7 @@ export default function Home() {
                   className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 >
                   <option value="">None</option>
-                  {masterData.handleProfiles.map(handle => (
+                  {filteredOptions.handles.map(handle => (
                     <option key={handle.code} value={handle.code}>
                       {handle.name} - {formatCurrency(handle.pricePerMeter)}/m
                     </option>
@@ -1286,14 +1400,16 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Connectors *
+                Connectors * {filteredOptions.connectors.length < masterData.connectorTypes.length && (
+                  <span className="text-xs text-gray-500">(filtered by frame)</span>
+                )}
               </label>
               <select
                 value={currentDoor.connectorCode || ''}
                 onChange={e => setCurrentDoor(prev => ({ ...prev, connectorCode: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               >
-                {masterData.connectorTypes.map(connector => (
+                {filteredOptions.connectors.map(connector => (
                   <option key={connector.code} value={connector.code}>
                     {connector.name} - ₹{connector.pricePerUnit}/unit
                   </option>

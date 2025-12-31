@@ -7,6 +7,9 @@ export const frameProfiles: FrameProfile[] = [
     width: 20,
     height: 40,
     pricePerMeter: 150,
+    suggestedHandles: ['HP001', 'HP002', 'HP004'],
+    suggestedGlassTypes: ['GL001', 'GL002', 'GL003'],
+    suggestedConnectors: ['CN001', 'CN002'],
   },
   {
     code: 'FP002',
@@ -14,6 +17,9 @@ export const frameProfiles: FrameProfile[] = [
     width: 25,
     height: 50,
     pricePerMeter: 200,
+    suggestedHandles: ['HP002', 'HP003'],
+    suggestedGlassTypes: ['GL001', 'GL004', 'GL005'],
+    suggestedConnectors: ['CN001', 'CN003'],
   },
   {
     code: 'FP003',
@@ -21,6 +27,9 @@ export const frameProfiles: FrameProfile[] = [
     width: 30,
     height: 60,
     pricePerMeter: 250,
+    suggestedHandles: ['HP002', 'HP003'],
+    suggestedGlassTypes: ['GL004', 'GL005', 'GL006'],
+    suggestedConnectors: ['CN002', 'CN003', 'CN004'],
   },
   {
     code: 'FP004',
@@ -28,6 +37,9 @@ export const frameProfiles: FrameProfile[] = [
     width: 22,
     height: 45,
     pricePerMeter: 180,
+    suggestedHandles: ['HP001', 'HP004'],
+    suggestedGlassTypes: ['GL001', 'GL002', 'GL003'],
+    suggestedConnectors: ['CN001', 'CN002'],
   },
   {
     code: 'FP005',
@@ -35,6 +47,9 @@ export const frameProfiles: FrameProfile[] = [
     width: 28,
     height: 55,
     pricePerMeter: 220,
+    suggestedHandles: ['HP002', 'HP003'],
+    suggestedGlassTypes: ['GL003', 'GL004', 'GL006'],
+    suggestedConnectors: ['CN002', 'CN003'],
   },
 ];
 

@@ -7,6 +7,9 @@ export interface FrameProfile {
   height: number; // mm
   pricePerMeter: number;
   imageUrl?: string;
+  suggestedHandles?: string[]; // Handle profile codes
+  suggestedGlassTypes?: string[]; // Glass type codes
+  suggestedConnectors?: string[]; // Connector codes
 }
 
 export interface HandleProfile {

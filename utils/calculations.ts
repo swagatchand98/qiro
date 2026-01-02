@@ -584,6 +584,11 @@ export const calculateCostSummary = (
 
 // Format currency
 export const formatCurrency = (amount: number): string => {
+  // Ensure amount is a valid number
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    amount = 0;
+  }
+  
   // Use consistent formatting to avoid hydration errors
   const formatted = amount.toFixed(2);
   const [integerPart, decimalPart] = formatted.split('.');
@@ -596,6 +601,27 @@ export const formatCurrency = (amount: number): string => {
     : lastThree;
   
   return `₹${formattedInteger}.${decimalPart}`;
+};
+
+// Format currency for PDF (without rupee symbol, using Rs.)
+export const formatCurrencyForPDF = (amount: number): string => {
+  // Ensure amount is a valid number
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    amount = 0;
+  }
+  
+  // Use consistent formatting
+  const formatted = amount.toFixed(2);
+  const [integerPart, decimalPart] = formatted.split('.');
+  
+  // Add Indian-style comma separators
+  const lastThree = integerPart.substring(integerPart.length - 3);
+  const otherNumbers = integerPart.substring(0, integerPart.length - 3);
+  const formattedInteger = otherNumbers !== '' 
+    ? otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + lastThree
+    : lastThree;
+  
+  return `Rs. ${formattedInteger}.${decimalPart}`;
 };
 
 // Format date

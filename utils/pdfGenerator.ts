@@ -7,12 +7,12 @@ import {
 } from '../types';
 import { masterData } from '../data/masterData';
 import {
-  formatCurrency,
+  formatCurrencyForPDF,
   formatDate,
   calculateDoorCosts,
   calculateCostSummary,
 } from './calculations';
-import { generateDoorDiagramSVG, generatePremiumElevationSVG } from './diagramGenerator';
+import { generatePremiumElevationSVG } from './diagramGenerator';
 import { generateCuttingSchemaeSVG } from './cuttingSchemaGenerator';
 
 export const generateQuotationPDF = async (
@@ -26,23 +26,73 @@ export const generateQuotationPDF = async (
   const margin = 20;
   let yPos = margin;
 
+  // Helper function to load and add logo
+  const addLogoToHeader = async (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg'));
+        } else {
+          reject(new Error('Failed to get canvas context'));
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load logo'));
+      img.src = '/logo_bg_white.jpeg';
+    });
+  };
+
+  // Load logo once at the beginning
+  let logoDataUrl: string;
+  try {
+    logoDataUrl = await addLogoToHeader();
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+    logoDataUrl = ''; // Fallback to no logo
+  }
+
   // Helper function to add minimal header
   const addMinimalHeader = (isFirstPage: boolean = false) => {
-    // Top black bar
+    // Top white bar
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, 25, 'F');
     
-    // Company name in white
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(32);
-    doc.setFont('helvetica', 'bold');
-    doc.text('QIRO', pageWidth/2 , 20, { align: 'center'});
+    // Add logo if available
+    if (logoDataUrl) {
+      try {
+        // Logo centered, 40mm wide, maintaining aspect ratio
+        const logoWidth = 80;
+        const logoHeight = 80 ; // Adjust based on your logo's aspect ratio
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = -20;
+        doc.addImage(logoDataUrl, 'JPEG', logoX, logoY, logoWidth, logoHeight);
+      } catch (error) {
+        console.error('Error adding logo to PDF:', error);
+        // Fallback to text
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(32);
+        doc.setFont('helvetica', 'bold');
+        doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+      }
+    } else {
+      // Fallback to text if logo failed to load
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(32);
+      doc.setFont('helvetica', 'bold');
+      doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+    }
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.15);
-    doc.line(margin, 27, pageWidth - margin, 27);
+    doc.line(margin, 32, pageWidth - margin, 32);
     
-    return 40; // Return starting yPos after header
+    return 45; // Return starting yPos after header
   };
 
   // ===== PAGE 1: QUOTATION =====
@@ -87,6 +137,15 @@ export const generateQuotationPDF = async (
   doc.setFont('helvetica', 'normal');
   doc.text(quotation.projectName, margin + 25, yPos);
   yPos += 6;
+  
+  // Add GST Number if available
+  if (quotation.customerGstNumber) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('GST No:', margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.text(quotation.customerGstNumber, margin + 25, yPos);
+    yPos += 6;
+  }
   
   doc.setFont('helvetica', 'bold');
   doc.text('Address:', margin, yPos);
@@ -135,7 +194,7 @@ export const generateQuotationPDF = async (
     doc.text(door.doorType.toUpperCase(), margin + 55, yPos);
     doc.text(`${door.width}×${door.height} ${door.measurementUnit}`, margin + 95, yPos);
     doc.text(door.quantity.toString(), margin + 125, yPos);
-    doc.text(formatCurrency(calc.totalCost), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(calc.totalCost), pageWidth - margin - 5, yPos, { align: 'right' });
     
     // Thin separator line
     yPos += 6;
@@ -157,14 +216,14 @@ export const generateQuotationPDF = async (
   
   // Only show final calculation stages
   doc.text('Job Total', margin, yPos);
-  doc.text(formatCurrency(costSummary.taxableAmount + costSummary.discount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.taxableAmount + costSummary.discount), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 6;
   
   // Discount (if applicable)
   if (costSummary.discount > 0) {
     doc.setTextColor(0, 150, 0);
     doc.text(`Discount (${quotation.globalDiscount}%)`, margin, yPos);
-    doc.text(`- ${formatCurrency(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(`- ${formatCurrencyForPDF(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     yPos += 6;
   }
@@ -178,12 +237,12 @@ export const generateQuotationPDF = async (
   
   // Taxable Amount
   doc.text('Subtotal', margin, yPos);
-  doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 6;
   
   // GST
   doc.text(`GST (${quotation.gstPercentage}%)`, margin, yPos);
-  doc.text(formatCurrency(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 6;
   
   // Final Amount line
@@ -200,7 +259,7 @@ export const generateQuotationPDF = async (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.text('TOTAL PAYABLE', margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   
   yPos += 12;
   
@@ -210,7 +269,7 @@ export const generateQuotationPDF = async (
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     doc.text(
-      `★ You save ${formatCurrency(costSummary.totalSavings)} ★`,
+      `★ You save ${formatCurrencyForPDF(costSummary.totalSavings)} ★`,
       pageWidth / 2,
       yPos,
       { align: 'center' }
@@ -219,27 +278,17 @@ export const generateQuotationPDF = async (
     yPos += 8;
   }
   
-  // Important Notes Box
   yPos += 5;
-  doc.setDrawColor(200, 200, 200);
-  doc.setFillColor(245, 245, 245);
-  doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 25, 2, 2, 'FD');
+  
   yPos += 6;
   
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text('📋 IMPORTANT:', margin + 3, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text('• Quotation valid for 30 days from date of issue', margin + 3, yPos);
   yPos += 4;
-  doc.text('• 50% advance payment required before fabrication', margin + 3, yPos);
+  
   yPos += 4;
-  doc.text('• Delivery timeline: 7-10 working days (subject to material availability)', margin + 3, yPos);
+  
   yPos += 4;
-  doc.text('• All measurements to be verified on-site before fabrication', margin + 3, yPos);
   
   yPos += 10;
   
@@ -323,254 +372,6 @@ export const generateQuotationPDF = async (
     });
     
     yPos += 8;
-    
-    // Material Images Section (if available)
-    const materialImages: Array<{ label: string; image: string | undefined }> = [
-      { label: 'Frame Profile', image: frameProfile?.imageUrl },
-      { label: 'Handle Profile', image: handleProfile?.imageUrl },
-      { label: 'Glass Type', image: glassType?.imageUrl },
-    ];
-    
-    // Add connector image if door has connectors
-    if (door.connectorCode) {
-      const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
-      if (connector?.imageUrl) {
-        materialImages.push({ label: 'Connector', image: connector.imageUrl });
-      }
-    }
-    
-    const availableImages = materialImages.filter(item => item.image);
-    
-    if (availableImages.length > 0) {
-      // Check if we need a new page
-      const imagesHeight = 60; // Height needed for larger images section
-      if (yPos > pageHeight - imagesHeight - 40) {
-        doc.addPage();
-        yPos = addMinimalHeader();
-      }
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('MATERIALS USED', margin, yPos);
-      yPos += 8;
-      
-      // Display images in a grid (3 per row for better fit)
-      const imageSize = 35; // Increased from 25mm to 35mm
-      const imageSpacing = 15;
-      const imagesPerRow = 3;
-      let currentX = margin;
-      let currentRow = 0;
-      
-      for (let i = 0; i < availableImages.length; i++) {
-        const item = availableImages[i];
-        const col = i % imagesPerRow;
-        
-        if (col === 0 && i > 0) {
-          currentRow++;
-          currentX = margin;
-        } else if (col > 0) {
-          currentX = margin + (col * (imageSize + imageSpacing));
-        }
-        
-        const imageY = yPos + (currentRow * (imageSize + 15));
-        
-        try {
-          if (item.image) {
-            // Draw border with shadow effect
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(0.5);
-            doc.rect(currentX, imageY, imageSize, imageSize);
-            
-            // Add image
-            doc.addImage(item.image, 'JPEG', currentX + 1, imageY + 1, imageSize - 2, imageSize - 2);
-            
-            // Add label below image with background
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 0, 0);
-            doc.text(item.label, currentX + imageSize / 2, imageY + imageSize + 5, { align: 'center' });
-            doc.setTextColor(0, 0, 0);
-          }
-        } catch (error) {
-          console.error(`Error adding ${item.label} image:`, error);
-        }
-      }
-      
-      // Update yPos to account for all image rows
-      yPos += Math.ceil(availableImages.length / imagesPerRow) * (imageSize + 15) + 8;
-    }
-    
-    // DUAL DIAGRAMS: Technical + Premium Elevation
-    if (yPos > pageHeight - 125) {
-      doc.addPage();
-      yPos = addMinimalHeader();
-    }
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('TECHNICAL DRAWINGS', margin, yPos);
-    yPos += 8;
-    
-    // Generate both SVG diagrams
-    try {
-      const technicalSVG = generateDoorDiagramSVG(door, calc.glassArea);
-      const elevationSVG = generatePremiumElevationSVG(door);
-      
-      // Diagram dimensions
-      const diagramWidth = 80;
-      const diagramHeight = 100;
-      const technicalX = margin + 5;
-      const elevationX = pageWidth - margin - diagramWidth - 5;
-      const diagramY = yPos;
-      
-      // Add Technical Diagram (left)
-      await new Promise<void>((resolve) => {
-        const img = new Image();
-        const svgBlob = new Blob([technicalSVG], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 400;
-          canvas.height = 500;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            const pngDataUrl = canvas.toDataURL('image/png');
-            doc.addImage(pngDataUrl, 'PNG', technicalX, diagramY, diagramWidth, diagramHeight);
-          }
-          
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.src = url;
-      });
-      
-      // Add Premium Elevation Diagram (right)
-      await new Promise<void>((resolve) => {
-        const img = new Image();
-        const svgBlob = new Blob([elevationSVG], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 500;
-          canvas.height = 650;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            const pngDataUrl = canvas.toDataURL('image/png');
-            doc.addImage(pngDataUrl, 'PNG', elevationX, diagramY, diagramWidth, diagramHeight);
-          }
-          
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.src = url;
-      });
-      
-      // Labels
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text('Technical View', technicalX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
-      doc.text('Elevation View', elevationX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
-      
-      // Update yPos after diagrams
-      yPos = diagramY + diagramHeight + 15;
-      
-      doc.setTextColor(0, 0, 0);
-    } catch (error) {
-      // Fallback if diagram generation fails
-      console.error('Diagram generation error:', error);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      doc.text('Technical diagrams unavailable', pageWidth / 2, yPos, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-      yPos += 10;
-    }
-    
-    // Cutting Schema Diagram - After door diagrams
-    if (yPos > pageHeight - 120) {
-      doc.addPage();
-      yPos = addMinimalHeader();
-    }
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('CUTTING SCHEMA', margin, yPos);
-    yPos += 8;
-    
-    // Generate and embed cutting schema diagram
-    try {
-      const schemaString = generateCuttingSchemaeSVG(door, calc.cuttingScheme);
-      
-      const schemaWidth = 150;
-      const schemaHeight = 100;
-      const schemaX = (pageWidth - schemaWidth) / 2;
-      const schemaY = yPos;
-      
-      await new Promise<void>((resolve) => {
-        const img = new Image();
-        const svgBlob = new Blob([schemaString], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-        
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 550;
-          canvas.height = 400;
-          const ctx = canvas.getContext('2d');
-          
-          if (ctx) {
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            const pngDataUrl = canvas.toDataURL('image/png');
-            doc.addImage(pngDataUrl, 'PNG', schemaX, schemaY, schemaWidth, schemaHeight);
-          }
-          
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        
-        img.src = url;
-      });
-      
-      yPos += schemaHeight + 10;
-      
-    } catch (error) {
-      console.error('Cutting schema diagram error:', error);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      doc.setTextColor(100, 100, 100);
-      doc.text('Cutting schema diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
-      doc.setTextColor(0, 0, 0);
-      yPos += 10;
-    }
     
     // ===== DETAILED COST BREAKDOWN FOR THIS DOOR =====
     if (yPos > pageHeight - 130) {
@@ -703,7 +504,7 @@ export const generateQuotationPDF = async (
       doc.text(item.item, margin + 2, yPos);
       doc.text(item.spec, margin + 45, yPos);
       doc.text(item.qty, margin + 100, yPos);
-      doc.text(formatCurrency(item.cost), pageWidth - margin - 5, yPos, { align: 'right' });
+      doc.text(formatCurrencyForPDF(item.cost), pageWidth - margin - 5, yPos, { align: 'right' });
       
       yPos += 5;
       doc.setLineWidth(0.1);
@@ -716,7 +517,7 @@ export const generateQuotationPDF = async (
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text('Cost Per Unit:', margin + 2, yPos);
-    doc.text(formatCurrency(calc.totalSellingPrice), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(calc.totalSellingPrice), pageWidth - margin - 5, yPos, { align: 'right' });
     yPos += 6;
     
     doc.text(`Quantity:`, margin + 2, yPos);
@@ -733,10 +534,166 @@ export const generateQuotationPDF = async (
     doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
     doc.setFontSize(10);
     doc.text('Total for this Shutter:', margin + 2, yPos);
-    doc.text(formatCurrency(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
     
     yPos += 15;
     doc.setFont('helvetica', 'normal');
+    
+    // ===== TECHNICAL DRAWING SECTION =====
+    if (yPos > pageHeight - 125) {
+      doc.addPage();
+      yPos = addMinimalHeader();
+    }
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text('TECHNICAL DRAWING', margin, yPos);
+    yPos += 8;
+    
+    // Generate premium elevation SVG diagram
+    try {
+      const elevationSVG = generatePremiumElevationSVG(door);
+      
+      // Diagram dimensions - centered on page
+      const diagramWidth = 90;
+      const diagramHeight = 110;
+      const diagramX = (pageWidth - diagramWidth) / 2;
+      const diagramY = yPos;
+      
+      // Add Premium Elevation Diagram (centered)
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        const svgBlob = new Blob([elevationSVG], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 700;
+          canvas.height = 850;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            const pngDataUrl = canvas.toDataURL('image/png');
+            doc.addImage(pngDataUrl, 'PNG', diagramX, diagramY, diagramWidth, diagramHeight);
+          }
+          
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        
+        img.src = url;
+      });
+      
+      // Label
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Technical Elevation View', diagramX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
+      
+      // Update yPos after diagram
+      yPos = diagramY + diagramHeight + 15;
+      
+      doc.setTextColor(0, 0, 0);
+    } catch (error) {
+      // Fallback if diagram generation fails
+      console.error('Diagram generation error:', error);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Technical diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      yPos += 10;
+    }
+    
+    // ===== USER UPLOADED REFERENCE IMAGE =====
+    if (door.referenceImage) {
+      // Check if new page needed
+      if (yPos > pageHeight - 90) {
+        doc.addPage();
+        yPos = addMinimalHeader();
+      }
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('REFERENCE IMAGE', margin, yPos);
+      yPos += 8;
+      
+      try {
+        // Load image to get its dimensions
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            // Calculate aspect ratio
+            const aspectRatio = img.width / img.height;
+            
+            // Maximum dimensions to fit on page
+            const maxWidth = 100;
+            const maxHeight = 100;
+            
+            let refImageWidth: number;
+            let refImageHeight: number;
+            
+            // Calculate dimensions maintaining aspect ratio
+            if (aspectRatio > 1) {
+              // Landscape
+              refImageWidth = Math.min(maxWidth, img.width * 0.1); // Scale down
+              refImageHeight = refImageWidth / aspectRatio;
+            } else {
+              // Portrait or square
+              refImageHeight = Math.min(maxHeight, img.height * 0.1); // Scale down
+              refImageWidth = refImageHeight * aspectRatio;
+            }
+            
+            const refImageX = (pageWidth - refImageWidth) / 2;
+            const refImageY = yPos;
+            
+            // Add border
+            doc.setDrawColor(0, 0, 0);
+            doc.setLineWidth(0.5);
+            doc.rect(refImageX, refImageY, refImageWidth, refImageHeight);
+            
+            // Add reference image maintaining aspect ratio
+            doc.addImage(door.referenceImage!, 'JPEG', refImageX + 1, refImageY + 1, refImageWidth - 2, refImageHeight - 2);
+            
+            // Label
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(100, 100, 100);
+            doc.text('Uploaded by customer', refImageX + refImageWidth / 2, refImageY + refImageHeight + 4, { align: 'center' });
+            doc.setTextColor(0, 0, 0);
+            
+            // Update yPos after image
+            yPos = refImageY + refImageHeight + 15;
+            resolve();
+          };
+          
+          img.onerror = () => {
+            console.error('Error loading reference image for dimension calculation');
+            resolve();
+          };
+          
+          img.src = door.referenceImage!;
+        });
+      } catch (error) {
+        console.error('Error adding reference image:', error);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 100, 100);
+        doc.text('Reference image unavailable', pageWidth / 2, yPos, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        yPos += 10;
+      }
+    }
     
     // Material Images Section - Show after diagrams for better visibility
     const connector = door.connectorCode ? masterData.connectorTypes.find(c => c.code === door.connectorCode) : undefined;
@@ -878,7 +835,7 @@ export const generateQuotationPDF = async (
   componentBreakdown.forEach(item => {
     if (item.amount > 0) {
       doc.text(item.name, margin + 2, yPos);
-      doc.text(formatCurrency(item.amount), pageWidth - margin - 5, yPos, { align: 'right' });
+      doc.text(formatCurrencyForPDF(item.amount), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
       doc.setLineWidth(0.1);
       doc.line(margin, yPos, pageWidth - margin, yPos);
@@ -890,7 +847,7 @@ export const generateQuotationPDF = async (
   yPos += 3;
   doc.setFont('helvetica', 'bold');
   doc.text('Material Subtotal:', margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.materialSubtotal), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.materialSubtotal), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 8;
   
   // Additional & Optional Items
@@ -904,7 +861,7 @@ export const generateQuotationPDF = async (
     
     if (costSummary.totalAdditionalCost > 0) {
       doc.text('Additional Components', margin + 2, yPos);
-      doc.text(formatCurrency(costSummary.totalAdditionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
+      doc.text(formatCurrencyForPDF(costSummary.totalAdditionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
       doc.line(margin, yPos, pageWidth - margin, yPos);
       yPos += 2;
@@ -912,7 +869,7 @@ export const generateQuotationPDF = async (
     
     if (costSummary.totalOptionalCost > 0) {
       doc.text('Optional Items', margin + 2, yPos);
-      doc.text(formatCurrency(costSummary.totalOptionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
+      doc.text(formatCurrencyForPDF(costSummary.totalOptionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
       doc.line(margin, yPos, pageWidth - margin, yPos);
       yPos += 2;
@@ -931,7 +888,7 @@ export const generateQuotationPDF = async (
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.text('Making Charges', margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.makingCharges), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.makingCharges), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 5;
   doc.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 2;
@@ -940,7 +897,7 @@ export const generateQuotationPDF = async (
   yPos += 3;
   doc.setFont('helvetica', 'bold');
   doc.text('Subtotal (with Fabrication):', margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.subtotalWithMaking), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.subtotalWithMaking), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 10;
   
   // Discount Section
@@ -951,16 +908,16 @@ export const generateQuotationPDF = async (
   if (costSummary.discount > 0) {
     doc.setTextColor(0, 150, 0);
     doc.text(`Discount (${quotation.globalDiscount}%)`, margin + 2, yPos);
-    doc.text(`- ${formatCurrency(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(`- ${formatCurrencyForPDF(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     yPos += 7;
     
     doc.setFont('helvetica', 'normal');
     doc.text('Taxable Amount:', margin + 2, yPos);
-    doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   } else {
     doc.text('Taxable Amount:', margin + 2, yPos);
-    doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   }
   
   yPos += 10;
@@ -971,7 +928,7 @@ export const generateQuotationPDF = async (
   
   doc.setFont('helvetica', 'bold');
   doc.text(`GST (${quotation.gstPercentage}%)`, margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   
   yPos += 12;
   
@@ -987,7 +944,7 @@ export const generateQuotationPDF = async (
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('TOTAL PAYABLE', margin + 2, yPos);
-  doc.text(formatCurrency(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  doc.text(formatCurrencyForPDF(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   
   yPos += 15;
   doc.setTextColor(0, 0, 0);
@@ -998,7 +955,7 @@ export const generateQuotationPDF = async (
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(
-      `★ Total Savings: ${formatCurrency(costSummary.totalSavings)} ★`,
+      `★ Total Savings: ${formatCurrencyForPDF(costSummary.totalSavings)} ★`,
       pageWidth / 2,
       yPos,
       { align: 'center' }
@@ -1040,8 +997,8 @@ export const generateQuotationPDF = async (
     
     doc.text(door.doorName, margin + 2, yPos);
     doc.text(door.quantity.toString(), margin + 70, yPos);
-    doc.text(formatCurrency(calc.totalSellingPrice), margin + 95, yPos);
-    doc.text(formatCurrency(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.text(formatCurrencyForPDF(calc.totalSellingPrice), margin + 95, yPos);
+    doc.text(formatCurrencyForPDF(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
     
     yPos += 5;
     doc.setLineWidth(0.1);
@@ -1190,6 +1147,442 @@ export const generateQuotationPDF = async (
     { align: 'center' }
   );
   
+  // ===== BANKING & PAYMENT DETAILS PAGE =====
+  
+  doc.addPage();
+  yPos = addMinimalHeader();
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PAYMENT & BANKING DETAILS', margin, yPos);
+  yPos += 2;
+  
+  doc.setLineWidth(0.5);
+  doc.line(margin, yPos, margin + 95, yPos);
+  yPos += 12;
+  
+  // Company Information
+  const companyInfo = masterData.companyInfo;
+  
+  if (companyInfo) {
+    // Company Details
+    doc.setFillColor(245, 245, 250);
+    doc.rect(margin, yPos - 3, pageWidth - 2 * margin, 60, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(companyInfo.companyName, margin + 3, yPos);
+    yPos += 7;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const addressLines = doc.splitTextToSize(companyInfo.address, pageWidth - 2 * margin - 10);
+    doc.text(addressLines, margin + 3, yPos);
+    yPos += addressLines.length * 4 + 3;
+    
+    doc.text(`Phone: ${companyInfo.phone}`, margin + 3, yPos);
+    yPos += 5;
+    doc.text(`Email: ${companyInfo.email}`, margin + 3, yPos);
+    yPos += 5;
+    if (companyInfo.website) {
+      doc.text(`Website: ${companyInfo.website}`, margin + 3, yPos);
+      yPos += 5;
+    }
+    
+    // Tax Details
+    if (companyInfo.gstNumber || companyInfo.panNumber) {
+      yPos += 2;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Tax Details:', margin + 3, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      
+      if (companyInfo.gstNumber) {
+        doc.text(`GST Number: ${companyInfo.gstNumber}`, margin + 3, yPos);
+        yPos += 5;
+      }
+      if (companyInfo.panNumber) {
+        doc.text(`PAN Number: ${companyInfo.panNumber}`, margin + 3, yPos);
+        yPos += 5;
+      }
+    }
+    
+    yPos += 10;
+    
+    // Banking Details
+    if (companyInfo.bankDetails) {
+      const bankDetails = companyInfo.bankDetails;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('BANKING DETAILS', margin, yPos);
+      yPos += 8;
+      
+      doc.setFillColor(240, 250, 245);
+      const bankBoxHeight = 65 + (bankDetails.branchName ? 5 : 0) + (bankDetails.upiId ? 5 : 0);
+      doc.rect(margin, yPos - 3, pageWidth - 2 * margin, bankBoxHeight, 'F');
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      
+      if (bankDetails.bankName) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bank Name:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.bankName, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      if (bankDetails.accountName) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Account Name:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.accountName, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      if (bankDetails.accountNumber) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Account Number:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.accountNumber, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      if (bankDetails.ifscCode) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('IFSC Code:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.ifscCode, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      if (bankDetails.branchName) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Branch:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.branchName, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      if (bankDetails.upiId) {
+        yPos += 2;
+        doc.setFont('helvetica', 'bold');
+        doc.text('UPI ID:', margin + 3, yPos);
+        doc.setFont('helvetica', 'normal');
+        doc.text(bankDetails.upiId, margin + 45, yPos);
+        yPos += 6;
+      }
+      
+      yPos += 5;
+    }
+    
+    // Payment Instructions
+    yPos += 10;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('PAYMENT INSTRUCTIONS', margin, yPos);
+    yPos += 8;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('1. Please make payment to the above bank account', margin + 3, yPos);
+    yPos += 6;
+    doc.text('2. Send payment confirmation via email or WhatsApp', margin + 3, yPos);
+    yPos += 6;
+    doc.text('3. Include quotation ID as reference in transaction', margin + 3, yPos);
+    yPos += 6;
+    doc.text('4. Fabrication will begin after payment confirmation', margin + 3, yPos);
+    yPos += 10;
+    
+    // Important Note
+    doc.setFillColor(255, 245, 235);
+    doc.rect(margin, yPos - 3, pageWidth - 2 * margin, 25, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(150, 75, 0);
+    doc.text('⚠ IMPORTANT:', margin + 3, yPos);
+    yPos += 6;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Please ensure the quotation ID is mentioned in payment remarks for quick processing.', margin + 3, yPos);
+    yPos += 5;
+    doc.text('For any payment related queries, please contact us at the above phone number or email.', margin + 3, yPos);
+  }
+  
+  // Footer
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.1);
+  doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+  
+  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(7);
+  doc.text(
+    `Banking & Payment Details | ${formatDate(new Date().toISOString())}`,
+    pageWidth / 2,
+    pageHeight - 10,
+    { align: 'center' }
+  );
+  
   // Save PDF
   doc.save(`Quotation_${quotation.id}_${quotation.customerName.replace(/\s+/g, '_')}.pdf`);
+};
+
+// ===== CUTTING SCHEMA PDF (FOR STAFF ONLY) =====
+export const generateCuttingSchemaPDF = async (
+  quotation: QuotationData,
+  doorCalculations: DoorCalculation[],
+  costSummary: CostSummary
+): Promise<void> => {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  let yPos = margin;
+
+  // Helper function to load and add logo
+  const addLogoToHeader = async (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg'));
+        } else {
+          reject(new Error('Failed to get canvas context'));
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load logo'));
+      img.src = '/logo_bg_white.jpeg';
+    });
+  };
+
+  // Load logo once at the beginning
+  let logoDataUrl: string;
+  try {
+    logoDataUrl = await addLogoToHeader();
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+    logoDataUrl = ''; // Fallback to no logo
+  }
+
+  // Helper function to add header
+  const addHeader = (isFirstPage: boolean = false) => {
+    // Top white bar
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 25, 'F');
+    
+    // Add logo if available
+    if (logoDataUrl) {
+      try {
+        // Logo centered, 40mm wide, maintaining aspect ratio
+        const logoWidth = 40;
+        const logoHeight = 12; // Adjust based on your logo's aspect ratio
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = 6;
+        doc.addImage(logoDataUrl, 'JPEG', logoX, logoY, logoWidth, logoHeight);
+      } catch (error) {
+        console.error('Error adding logo to PDF:', error);
+        // Fallback to text
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(32);
+        doc.setFont('helvetica', 'bold');
+        doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+      }
+    } else {
+      // Fallback to text if logo failed to load
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(32);
+      doc.setFont('helvetica', 'bold');
+      doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+    }
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.15);
+    doc.line(margin, 27, pageWidth - margin, 27);
+    
+    return 40;
+  };
+
+  yPos = addHeader(true);
+
+  // Title
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('CUTTING SCHEMA - STAFF ONLY', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 10;
+
+  // Customer and Project Info
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Customer: ${quotation.customerName}`, margin, yPos);
+  doc.text(`Date: ${formatDate(quotation.date)}`, pageWidth - margin - 60, yPos);
+  yPos += 5;
+  doc.text(`Project: ${quotation.projectName}`, margin, yPos);
+  doc.text(`ID: ${quotation.id}`, pageWidth - margin - 60, yPos);
+  yPos += 12;
+
+  // Group doors by profile combination (frame + handle)
+  interface ProfileGroup {
+    key: string;
+    frameProfile: string;
+    handleProfile: string;
+    doors: Array<{ door: DoorConfiguration; calc: DoorCalculation; index: number }>;
+    totalQuantity: number;
+  }
+
+  const profileGroups: Map<string, ProfileGroup> = new Map();
+
+  // Group all doors by their profile combination
+  quotation.doors.forEach((door, index) => {
+    const frameProfile = door.frameProfileCode || door.profileCode;
+    const handleProfile = door.handleProfileCode || 'NONE';
+    const key = `${frameProfile}|${handleProfile}`;
+
+    if (!profileGroups.has(key)) {
+      profileGroups.set(key, {
+        key,
+        frameProfile,
+        handleProfile,
+        doors: [],
+        totalQuantity: 0,
+      });
+    }
+
+    const group = profileGroups.get(key)!;
+    group.doors.push({ door, calc: doorCalculations[index], index });
+    group.totalQuantity += door.quantity;
+  });
+
+  // Generate cutting schema for each unique profile combination
+  let groupNumber = 1;
+  for (const group of profileGroups.values()) {
+    // Check if new page needed
+    if (yPos > pageHeight - 140) {
+      doc.addPage();
+      yPos = addHeader();
+    }
+
+    // Profile Group Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(`Profile Combination ${groupNumber}`, margin, yPos);
+    yPos += 6;
+
+    // Profile details
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Frame Profile: ${group.frameProfile}`, margin, yPos);
+    doc.text(`Handle Profile: ${group.handleProfile}`, margin + 70, yPos);
+    yPos += 5;
+
+    // List all doors using this profile combination
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`Doors using this profile (Total Qty: ${group.totalQuantity}):`, margin, yPos);
+    yPos += 5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    for (const { door, index } of group.doors) {
+      doc.text(
+        `• Door ${index + 1}: ${door.doorName} - ${door.width}x${door.height}mm (Qty: ${door.quantity})`,
+        margin + 5,
+        yPos
+      );
+      yPos += 4;
+    }
+    yPos += 4;
+
+    // Cutting Schema Diagram (use first door as reference since all have same profile)
+    const referenceDoor = group.doors[0].door;
+    const referenceCalc = group.doors[0].calc;
+
+    try {
+      const schemaString = generateCuttingSchemaeSVG(referenceDoor, referenceCalc.cuttingScheme);
+      
+      const schemaWidth = 150;
+      const schemaHeight = 100;
+      const schemaX = (pageWidth - schemaWidth) / 2;
+      const schemaY = yPos;
+      
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        const svgBlob = new Blob([schemaString], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 550;
+          canvas.height = 400;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            const pngDataUrl = canvas.toDataURL('image/png');
+            doc.addImage(pngDataUrl, 'PNG', schemaX, schemaY, schemaWidth, schemaHeight);
+          }
+          
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        
+        img.src = url;
+      });
+      
+      yPos += schemaHeight + 8;
+      
+    } catch (error) {
+      console.error('Cutting schema diagram error:', error);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 100, 100);
+      doc.text('Cutting schema diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      yPos += 10;
+    }
+
+    // Add separator line between profile groups
+    if (groupNumber < profileGroups.size) {
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.1);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 8;
+    }
+
+    groupNumber++;
+  }
+
+  // Footer
+  yPos = pageHeight - 15;
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.1);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  
+  doc.setTextColor(100, 100, 100);
+  doc.setFontSize(7);
+  doc.text(
+    `CONFIDENTIAL - For Staff Use Only | Generated on ${formatDate(new Date().toISOString())}`,
+    pageWidth / 2,
+    pageHeight - 10,
+    { align: 'center' }
+  );
+
+  // Save PDF
+  doc.save(`CuttingSchema_${quotation.id}_${quotation.customerName.replace(/\s+/g, '_')}.pdf`);
 };

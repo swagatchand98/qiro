@@ -514,4 +514,21 @@ export const masterData: MasterData = {
   },
   defaultGST: 18,
   defaultGlassWastage: 10,
+  companyInfo: {
+    companyName: 'QIRO Glass Solutions',
+    address: 'Address Line 1, Address Line 2, City, State - PIN',
+    phone: '+91-XXXXXXXXXX',
+    email: 'info@qiro.com',
+    website: 'www.qiro.com',
+    gstNumber: '',
+    panNumber: '',
+    bankDetails: {
+      bankName: '',
+      accountName: '',
+      accountNumber: '',
+      ifscCode: '',
+      branchName: '',
+      upiId: '',
+    },
+  },
 };

@@ -2,9 +2,46 @@
 
 import React, { useState } from 'react';
 import { DoorConfiguration, QuotationData, MasterData } from '../../types';
-import { calculateDoorCosts, calculateCostSummary } from '../../utils/calculations';
-import { generateQuotationPDF } from '../../utils/pdfGenerator';
+import { calculateDoorCosts, calculateCostSummary, convertToMm } from '../../utils/calculations';
+import { generateQuotationPDF, generateCuttingSchemaPDF } from '../../utils/pdfGenerator';
 import { masterData } from '../../data/masterData';
+
+// Helper function to calculate hinge positions
+function calculateHingePositions(heightMm: number, hingeQuantity: number): number[] {
+  if (!heightMm || !hingeQuantity || hingeQuantity < 2) return [];
+  
+  // For very small heights, use proportional positioning
+  if (heightMm < 500) {
+    const margin = heightMm * 0.15; // 15% margin from top and bottom
+    if (hingeQuantity === 2) {
+      return [margin, heightMm - margin];
+    } else {
+      const positions: number[] = [];
+      const availableHeight = heightMm - (2 * margin);
+      const spacing = availableHeight / (hingeQuantity - 1);
+      for (let i = 0; i < hingeQuantity; i++) {
+        positions.push(margin + (spacing * i));
+      }
+      return positions;
+    }
+  }
+  
+  // For normal heights, use fixed 200mm margins
+  const topMargin = 200; // 200mm from top
+  const bottomMargin = 200; // 200mm from bottom
+  const availableHeight = heightMm - topMargin - bottomMargin;
+  
+  if (hingeQuantity === 2) {
+    return [topMargin, heightMm - bottomMargin];
+  } else {
+    const positions: number[] = [];
+    const spacing = availableHeight / (hingeQuantity - 1);
+    for (let i = 0; i < hingeQuantity; i++) {
+      positions.push(topMargin + (spacing * i));
+    }
+    return positions;
+  }
+}
 
 export default function PreviewPDFPage() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -53,6 +90,7 @@ export default function PreviewPDFPage() {
         hingeCode: 'HNG-001',
         hingePosition: 'left',
         hingeQuantity: 3,
+        hingePositionMm: calculateHingePositions(2400, 3),
         carcassThickness: 18,
         connectorCode: 'CON-001',
         connectorQuantity: 4,
@@ -78,6 +116,7 @@ export default function PreviewPDFPage() {
         hingeCode: 'HNG-002',
         hingePosition: 'right',
         hingeQuantity: 2,
+        hingePositionMm: calculateHingePositions(600, 2),
         carcassThickness: 18,
         connectorCode: 'CON-002',
         connectorQuantity: 2,
@@ -103,6 +142,7 @@ export default function PreviewPDFPage() {
         hingeCode: 'HNG-001',
         hingePosition: 'left',
         hingeQuantity: 0,
+        hingePositionMm: [],
         carcassThickness: 18,
         connectorCode: 'CON-001',
         connectorQuantity: 6,
@@ -128,6 +168,7 @@ export default function PreviewPDFPage() {
         hingeCode: 'HNG-003',
         hingePosition: 'right',
         hingeQuantity: 4,
+        hingePositionMm: calculateHingePositions(2200, 4),
         carcassThickness: 18,
         connectorCode: 'CON-003',
         connectorQuantity: 8,
@@ -153,6 +194,7 @@ export default function PreviewPDFPage() {
         hingeCode: 'HNG-001',
         hingePosition: 'right',
         hingeQuantity: 3,
+        hingePositionMm: calculateHingePositions(2100, 3),
         carcassThickness: 18,
         connectorCode: 'CON-001',
         connectorQuantity: 2,
@@ -173,6 +215,23 @@ export default function PreviewPDFPage() {
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Check console for details.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateCuttingSchemaPDF = async () => {
+    setIsGenerating(true);
+    try {
+      const doorCalculations = sampleQuotation.doors.map(door =>
+        calculateDoorCosts(door, sampleQuotation.glassWastagePercentage)
+      );
+      const costSummary = calculateCostSummary(sampleQuotation, doorCalculations);
+      
+      await generateCuttingSchemaPDF(sampleQuotation, doorCalculations, costSummary);
+    } catch (error) {
+      console.error('Error generating Cutting Schema PDF:', error);
+      alert('Failed to generate Cutting Schema PDF. Check console for details.');
     } finally {
       setIsGenerating(false);
     }
@@ -261,7 +320,7 @@ export default function PreviewPDFPage() {
                 <li>Technical door diagrams (type-specific)</li>
                 <li>Uploaded door images (if any)</li>
                 <li>Specifications table</li>
-                <li>Cutting schema</li>
+                <li>Cost breakdown per door</li>
               </ul>
             </div>
             
@@ -321,30 +380,58 @@ export default function PreviewPDFPage() {
 
         {/* Generate Button */}
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Generate Test PDF</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Click the button to generate and download a sample PDF with all features
-              </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Generate Test PDF</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Click the button to generate and download a sample PDF with all features
+                </p>
+              </div>
+              <button
+                onClick={handleGeneratePDF}
+                disabled={isGenerating}
+                className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {isGenerating ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </span>
+                ) : (
+                  'Generate PDF'
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleGeneratePDF}
-              disabled={isGenerating}
-              className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isGenerating ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Generating...
-                </span>
-              ) : (
-                'Generate PDF'
-              )}
-            </button>
+            
+            <div className="border-t pt-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Generate Cutting Schema (Staff Only)</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Generate a separate PDF with cutting schemas for manufacturing
+                </p>
+              </div>
+              <button
+                onClick={handleGenerateCuttingSchemaPDF}
+                disabled={isGenerating}
+                className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {isGenerating ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </span>
+                ) : (
+                  'Generate Cutting Schema'
+                )}
+              </button>
+            </div>
           </div>
         </div>
 

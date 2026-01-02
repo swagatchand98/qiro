@@ -25,15 +25,51 @@ import {
   convertToMm,
 } from '../utils/calculations';
 import { DoorDiagram, generatePremiumElevationSVG } from '../utils/diagramGenerator';
-import { generateQuotationPDF } from '../utils/pdfGenerator';
+import { generateQuotationPDF, generateCuttingSchemaPDF } from '../utils/pdfGenerator';
 import { exportToExcel, exportToText, saveQuotationToLocalStorage } from '../utils/exportUtils';
 import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, ProductType, DoorTypeCompatibility, DividerMode, MakingChargeType, PricingSettings } from '../types';
 
+// Helper function to calculate hinge positions
+function calculateHingePositions(heightMm: number, hingeQuantity: number): number[] {
+  if (!heightMm || !hingeQuantity || hingeQuantity < 2) return [];
+  
+  // For very small heights, use proportional positioning
+  if (heightMm < 500) {
+    const margin = heightMm * 0.15; // 15% margin from top and bottom
+    if (hingeQuantity === 2) {
+      return [margin, heightMm - margin];
+    } else {
+      const positions: number[] = [];
+      const availableHeight = heightMm - (2 * margin);
+      const spacing = availableHeight / (hingeQuantity - 1);
+      for (let i = 0; i < hingeQuantity; i++) {
+        positions.push(margin + (spacing * i));
+      }
+      return positions;
+    }
+  }
+  
+  // For normal heights, use fixed 200mm margins
+  const topMargin = 200; // 200mm from top
+  const bottomMargin = 200; // 200mm from bottom
+  const availableHeight = heightMm - topMargin - bottomMargin;
+  
+  if (hingeQuantity === 2) {
+    return [topMargin, heightMm - bottomMargin];
+  } else {
+    const positions: number[] = [];
+    const spacing = availableHeight / (hingeQuantity - 1);
+    for (let i = 0; i < hingeQuantity; i++) {
+      positions.push(topMargin + (spacing * i));
+    }
+    return positions;
+  }
+}
 
 export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'defaults'>('frames');
+  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'company-info' | 'defaults'>('frames');
   const [showReport, setShowReport] = useState(false);
   
   // Password protection state
@@ -175,7 +211,7 @@ export default function Home() {
     // Hardware (auto-calculated)
     hingePosition: 'left',
     hingeCode: undefined,
-    hingeQuantity: undefined,
+    hingeQuantity: 2,
     hingePositionMm: undefined,
     
     // Connectors (auto-calculated)
@@ -193,6 +229,25 @@ export default function Home() {
     carcassThickness: 18,
     liftAvailable: true,
   });
+
+  // Helper function to ensure door has hinge positions calculated
+  const ensureHingePositions = (door: DoorConfiguration): DoorConfiguration => {
+    // Always recalculate to ensure fresh positions
+    const heightMm = convertToMm(door.height, door.measurementUnit);
+    const hingeQty = door.hingeQuantity || 2;
+    
+    if (heightMm > 0 && hingeQty >= 2) {
+      const positions = calculateHingePositions(heightMm, hingeQty);
+      console.log('Calculated hinge positions:', positions, 'for height:', heightMm, 'qty:', hingeQty);
+      return {
+        ...door,
+        hingePositionMm: positions
+      };
+    }
+    
+    console.log('No hinge positions calculated - heightMm:', heightMm, 'hingeQty:', hingeQty);
+    return door;
+  };
 
   // Calculate door costs
   const doorCalculations = useMemo<DoorCalculation[]>(() => {
@@ -242,6 +297,22 @@ export default function Home() {
       saveQuotationToLocalStorage(quotation);
     }
   }, [quotation]);
+
+  // Auto-calculate hinge positions when height or hinge quantity changes
+  useEffect(() => {
+    const heightMm = convertToMm(currentDoor.height, currentDoor.measurementUnit);
+    const hingeQty = currentDoor.hingeQuantity || 2;
+    
+    if (heightMm > 0) {
+      const positions = calculateHingePositions(heightMm, hingeQty);
+      if (JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm)) {
+        setCurrentDoor(prev => ({
+          ...prev,
+          hingePositionMm: positions
+        }));
+      }
+    }
+  }, [currentDoor.height, currentDoor.hingeQuantity, currentDoor.measurementUnit]);
 
   const handleAddDoor = () => {
     if (!currentDoor.doorName || !currentDoor.height || !currentDoor.width) {
@@ -323,6 +394,14 @@ export default function Home() {
       return;
     }
     await generateQuotationPDF(quotation, doorCalculations, costSummary);
+  };
+
+  const handleExportCuttingSchema = async () => {
+    if (!quotation.customerName || quotation.doors.length === 0) {
+      alert('Please add customer details and at least one door');
+      return;
+    }
+    await generateCuttingSchemaPDF(quotation, doorCalculations, costSummary);
   };
 
   const handleExportExcel = () => {
@@ -623,7 +702,7 @@ export default function Home() {
 
               {/* Tabs */}
               <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200">
-                {(['frames', 'handles', 'glass', 'connectors', 'clients', 'jobs', 'sliding-bundles', 'defaults'] as const).map(tab => (
+                {(['frames', 'handles', 'glass', 'connectors', 'clients', 'jobs', 'sliding-bundles', 'company-info', 'defaults'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -640,6 +719,7 @@ export default function Home() {
                     {tab === 'clients' && 'Clients'}
                     {tab === 'jobs' && 'Jobs'}
                     {tab === 'sliding-bundles' && 'Sliding Bundles'}
+                    {tab === 'company-info' && 'Company Info'}
                     {tab === 'defaults' && 'Defaults'}
                   </button>
                 ))}
@@ -1766,6 +1846,209 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Company Info Tab */}
+                {activeTab === 'company-info' && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Company Information</h3>
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-semibold text-gray-700 mb-3">Basic Details</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.companyName || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, companyName: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.phone || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, phone: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input
+                              type="email"
+                              value={masterData.companyInfo?.email || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, email: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.website || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, website: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                            <textarea
+                              value={masterData.companyInfo?.address || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, address: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              rows={3}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-semibold text-blue-800 mb-3">Tax Details</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">GST Number</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.gstNumber || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, gstNumber: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="e.g., 29ABCDE1234F1Z5"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">PAN Number</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.panNumber || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: { ...prev.companyInfo!, panNumber: e.target.value }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="e.g., ABCDE1234F"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <h4 className="font-semibold text-green-800 mb-3">Banking Details</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Bank Name</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.bankName || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, bankName: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Account Name</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.accountName || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, accountName: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.accountNumber || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, accountNumber: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">IFSC Code</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.ifscCode || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, ifscCode: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Branch Name</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.branchName || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, branchName: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">UPI ID</label>
+                            <input
+                              type="text"
+                              value={masterData.companyInfo?.bankDetails?.upiId || ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                companyInfo: {
+                                  ...prev.companyInfo!,
+                                  bankDetails: { ...prev.companyInfo!.bankDetails!, upiId: e.target.value }
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="e.g., company@upi"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Defaults Tab */}
                 {activeTab === 'defaults' && (
                   <div>
@@ -2261,6 +2544,20 @@ export default function Home() {
               />
             </div>
 
+            {/* Customer GST Number */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                GST Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={quotation.customerGstNumber || ''}
+                onChange={e => setQuotation(prev => ({ ...prev, customerGstNumber: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                placeholder="e.g., 29ABCDE1234F1Z5"
+              />
+            </div>
+
             {/* Address */}
             <div className="md:col-span-2 lg:col-span-3">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
@@ -2359,20 +2656,6 @@ export default function Home() {
                     onChange={e => setCurrentDoor(prev => ({ ...prev, height: parseFloat(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                     placeholder="800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Thickness (mm)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={currentDoor.thickness || ''}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, thickness: parseFloat(e.target.value) || undefined }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                    placeholder="Optional"
                   />
                 </div>
                 <div>
@@ -2532,21 +2815,10 @@ export default function Home() {
                     <input
                       type="number"
                       min="2"
-                      value={currentDoor.hingeQuantity || ''}
-                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: parseInt(e.target.value) || 2 }))}
+                      value={currentDoor.hingeQuantity || 2}
+                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, parseInt(e.target.value) || 2) }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Carcass Thickness (mm)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={currentDoor.carcassThickness}
-                      onChange={e => setCurrentDoor(prev => ({ ...prev, carcassThickness: parseInt(e.target.value) || 18 }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                      placeholder="2"
                     />
                   </div>
                 </div>
@@ -3088,20 +3360,10 @@ export default function Home() {
             {/* Door Preview Diagrams */}
             <div className="bg-gray-50 rounded-lg p-4">
               {currentDoor.width > 0 && currentDoor.height > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Technical Diagram */}
-                  <div className="flex flex-col items-center">
-                    <div className="mb-2">
-                      <DoorDiagram door={currentDoor} width={350} height={500} />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">Technical View</p>
-                  </div>
-                  
-                  {/* Premium Elevation Diagram */}
-                  <div className="flex flex-col items-center">
-                    <div className="mb-2" dangerouslySetInnerHTML={{ __html: generatePremiumElevationSVG(currentDoor) }} />
-                    <p className="text-sm font-medium text-gray-700">Elevation View</p>
-                  </div>
+                <div className="flex flex-col items-center">
+                  {/* Premium Elevation Diagram - CAD Style */}
+                  <div className="mb-2" dangerouslySetInnerHTML={{ __html: generatePremiumElevationSVG(ensureHingePositions(currentDoor)) }} />
+                  <p className="text-sm font-medium text-gray-700">Technical Elevation View</p>
                 </div>
               ) : (
                 <div className="text-center text-gray-400 py-12">
@@ -3194,31 +3456,6 @@ export default function Home() {
                 onChange={e => setCurrentDoor(prev => ({ ...prev, connectorQuantity: parseInt(e.target.value) || 0 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Lift Available
-              </label>
-              <div className="flex items-center space-x-6">
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={currentDoor.liftAvailable === true}
-                    onChange={() => setCurrentDoor(prev => ({ ...prev, liftAvailable: true }))}
-                    className="mr-2 w-4 h-4 text-black focus:ring-black"
-                  />
-                  <span className="text-sm">Yes</span>
-                </label>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={currentDoor.liftAvailable === false}
-                    onChange={() => setCurrentDoor(prev => ({ ...prev, liftAvailable: false }))}
-                    className="mr-2 w-4 h-4 text-black focus:ring-black"
-                  />
-                  <span className="text-sm">No</span>
-                </label>
-              </div>
             </div>
           </div>
         </section>
@@ -3680,7 +3917,7 @@ export default function Home() {
               <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">9</span>
               Export Options
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={handleExportPDF}
                 className="bg-black hover:bg-gray-800 text-white font-semibold py-4 px-6 rounded transition-colors flex items-center justify-center"
@@ -3689,6 +3926,15 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
                 Export PDF
+              </button>
+              <button
+                onClick={handleExportCuttingSchema}
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold py-4 px-6 rounded transition-colors flex items-center justify-center"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                Cutting Schema (Staff)
               </button>
               <button
                 onClick={handleExportExcel}

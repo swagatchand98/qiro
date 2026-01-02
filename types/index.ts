@@ -267,6 +267,7 @@ export interface QuotationData {
   phone: string;
   city?: string;
   address: string;
+  customerGstNumber?: string; // Optional GST number
   
   // Job Details
   salesperson?: string;
@@ -353,4 +354,25 @@ export interface MasterData {
   pricingSettings: PricingSettings; // Pricing & charges configuration
   defaultGST: number;
   defaultGlassWastage: number;
+  companyInfo?: CompanyInfo; // Company details for invoices
+}
+
+export interface CompanyInfo {
+  companyName: string;
+  address: string;
+  phone: string;
+  email: string;
+  website?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  bankDetails?: BankDetails;
+}
+
+export interface BankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branchName?: string;
+  upiId?: string;
 }

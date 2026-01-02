@@ -12,7 +12,7 @@ import {
   calculateDoorCosts,
   calculateCostSummary,
 } from './calculations';
-import { generateDoorDiagramSVG } from './diagramGenerator';
+import { generateDoorDiagramSVG, generatePremiumElevationSVG } from './diagramGenerator';
 import { generateCuttingSchemaeSVG } from './cuttingSchemaGenerator';
 
 export const generateQuotationPDF = async (
@@ -98,7 +98,7 @@ export const generateQuotationPDF = async (
   // Door Details Table
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('DOOR CONFIGURATION', margin, yPos);
+  doc.text('SHUTTER CONFIGURATION', margin, yPos);
   yPos += 8;
   
   // Table header with black background
@@ -108,11 +108,11 @@ export const generateQuotationPDF = async (
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('DOOR NAME', margin + 2, yPos);
-  doc.text('TYPE', margin + 50, yPos);
-  doc.text('SIZE', margin + 85, yPos);
-  doc.text('QTY', margin + 120, yPos);
-  doc.text('COST', pageWidth - margin - 2, yPos, { align: 'right' });
+  doc.text('SHUTTER NAME', margin + 2, yPos);
+  doc.text('TYPE', margin + 55, yPos);
+  doc.text('SIZE', margin + 95, yPos);
+  doc.text('QTY', margin + 125, yPos);
+  doc.text('AMOUNT', pageWidth - margin - 2, yPos, { align: 'right' });
   
   yPos += 7;
   
@@ -132,9 +132,9 @@ export const generateQuotationPDF = async (
     }
     
     doc.text(door.doorName, margin + 2, yPos);
-    doc.text(door.doorType, margin + 50, yPos);
-    doc.text(`${door.width}×${door.height}${door.measurementUnit}`, margin + 85, yPos);
-    doc.text(door.quantity.toString(), margin + 120, yPos);
+    doc.text(door.doorType.toUpperCase(), margin + 55, yPos);
+    doc.text(`${door.width}×${door.height} ${door.measurementUnit}`, margin + 95, yPos);
+    doc.text(door.quantity.toString(), margin + 125, yPos);
     doc.text(formatCurrency(calc.totalCost), pageWidth - margin - 5, yPos, { align: 'right' });
     
     // Thin separator line
@@ -144,88 +144,104 @@ export const generateQuotationPDF = async (
     yPos += 1;
   });
   
-  yPos += 8;
+  yPos += 10;
   
-  // Cost Summary
+  // Payment Summary (NO COST BREAKDOWN - CLIENT FACING)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('COST SUMMARY', margin, yPos);
+  doc.text('PAYMENT SUMMARY', margin, yPos);
   yPos += 8;
   
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   
-  const summaryItems = [
-    { label: 'Hardware Cost (Frame + Handle + Connectors)', value: costSummary.totalHardwareCost },
-    { label: 'Glass Cost', value: costSummary.totalGlassCost },
-    { label: 'Additional Components', value: costSummary.totalAdditionalCost },
-    { label: 'Optional Items', value: costSummary.totalOptionalCost },
-  ];
+  // Only show final calculation stages
+  doc.text('Job Total', margin, yPos);
+  doc.text(formatCurrency(costSummary.taxableAmount + costSummary.discount), pageWidth - margin - 5, yPos, { align: 'right' });
+  yPos += 6;
   
-  summaryItems.forEach(item => {
-    doc.text(item.label, margin, yPos);
-    doc.text(formatCurrency(item.value), pageWidth - margin - 5, yPos, { align: 'right' });
-    yPos += 5;
-  });
-  
-  // Subtotal
-  yPos += 2;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.3);
-  doc.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 5;
-  
-  doc.setFont('helvetica', 'normal');
-  doc.text('Subtotal', margin, yPos);
-  doc.text(formatCurrency(costSummary.subtotal), pageWidth - margin - 5, yPos, { align: 'right' });
-  yPos += 5;
-  
-  // Discount
+  // Discount (if applicable)
   if (costSummary.discount > 0) {
+    doc.setTextColor(0, 150, 0);
     doc.text(`Discount (${quotation.globalDiscount}%)`, margin, yPos);
-    doc.text(`-${formatCurrency(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
-    yPos += 5;
+    doc.text(`- ${formatCurrency(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 6;
   }
   
+  // Subtotal line
+  yPos += 2;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 6;
+  
   // Taxable Amount
-  doc.text('Taxable Amount', margin, yPos);
+  doc.text('Subtotal', margin, yPos);
   doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
-  yPos += 5;
+  yPos += 6;
   
   // GST
   doc.text(`GST (${quotation.gstPercentage}%)`, margin, yPos);
   doc.text(formatCurrency(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
-  yPos += 5;
+  yPos += 6;
   
-  // Final Amount
-  yPos += 2;
+  // Final Amount line
+  yPos += 3;
   doc.setLineWidth(0.5);
   doc.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 7;
+  yPos += 8;
   
+  // Final Payable Amount - Highlighted
   doc.setFillColor(0, 0, 0);
   doc.setTextColor(255, 255, 255);
   doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 10, 'F');
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('TOTAL AMOUNT', margin + 2, yPos);
+  doc.text('TOTAL PAYABLE', margin + 2, yPos);
   doc.text(formatCurrency(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   
   yPos += 12;
   
   // Savings Message
   if (costSummary.totalSavings > 0) {
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(0, 150, 0);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
     doc.text(
-      `You save ${formatCurrency(costSummary.totalSavings)} on this quotation`,
+      `★ You save ${formatCurrency(costSummary.totalSavings)} ★`,
       pageWidth / 2,
       yPos,
       { align: 'center' }
     );
+    doc.setTextColor(0, 0, 0);
+    yPos += 8;
   }
+  
+  // Important Notes Box
+  yPos += 5;
+  doc.setDrawColor(200, 200, 200);
+  doc.setFillColor(245, 245, 245);
+  doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 25, 2, 2, 'FD');
+  yPos += 6;
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('📋 IMPORTANT:', margin + 3, yPos);
+  yPos += 5;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text('• Quotation valid for 30 days from date of issue', margin + 3, yPos);
+  yPos += 4;
+  doc.text('• 50% advance payment required before fabrication', margin + 3, yPos);
+  yPos += 4;
+  doc.text('• Delivery timeline: 7-10 working days (subject to material availability)', margin + 3, yPos);
+  yPos += 4;
+  doc.text('• All measurements to be verified on-site before fabrication', margin + 3, yPos);
+  
+  yPos += 10;
   
   // Footer
   doc.setDrawColor(220, 220, 220);
@@ -384,41 +400,7 @@ export const generateQuotationPDF = async (
       yPos += Math.ceil(availableImages.length / imagesPerRow) * (imageSize + 15) + 8;
     }
     
-    // Cost Breakdown
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('COST BREAKDOWN', margin, yPos);
-    yPos += 8;
-    
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    
-    const costItems = [
-      ['Frame Cost', calc.frameCost],
-      ['Handle Cost', calc.handleCost],
-      ['Glass Cost', calc.glassCost],
-      ['Connector Cost', calc.connectorCost],
-    ];
-    
-    costItems.forEach(([label, value]) => {
-      doc.text(String(label), margin, yPos);
-      doc.text(formatCurrency(value as number), pageWidth - margin - 5, yPos, { align: 'right' });
-      yPos += 6;
-    });
-    
-    yPos += 2;
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.3);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
-    yPos += 6;
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('Total Cost', margin, yPos);
-    doc.text(formatCurrency(calc.totalCost), pageWidth - margin - 5, yPos, { align: 'right' });
-    
-    yPos += 12;
-    
-    // Door Diagram
+    // DUAL DIAGRAMS: Technical + Premium Elevation
     if (yPos > pageHeight - 125) {
       doc.addPage();
       yPos = addMinimalHeader();
@@ -426,116 +408,91 @@ export const generateQuotationPDF = async (
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text('DOOR DIAGRAM', margin, yPos);
+    doc.text('TECHNICAL DRAWINGS', margin, yPos);
     yPos += 8;
     
-    // Generate SVG and convert to PNG for PDF embedding
+    // Generate both SVG diagrams
     try {
-      const svgString = generateDoorDiagramSVG(door, calc.glassArea);
+      const technicalSVG = generateDoorDiagramSVG(door, calc.glassArea);
+      const elevationSVG = generatePremiumElevationSVG(door);
       
       // Diagram dimensions
-      const diagramWidth = 70;
-      const diagramHeight = 90;
-      let diagramX = margin;
+      const diagramWidth = 80;
+      const diagramHeight = 100;
+      const technicalX = margin + 5;
+      const elevationX = pageWidth - margin - diagramWidth - 5;
       const diagramY = yPos;
       
-      // If there's a reference image, show both side by side
-      if (door.referenceImage) {
-        diagramX = margin; // Technical diagram on left
-        const photoX = margin + diagramWidth + 10; // Photo on right
+      // Add Technical Diagram (left)
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        const svgBlob = new Blob([technicalSVG], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
         
-        // Add technical diagram
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-          const url = URL.createObjectURL(svgBlob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 400;
+          canvas.height = 500;
+          const ctx = canvas.getContext('2d');
           
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 400;
-            canvas.height = 500;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.fillStyle = 'white';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(img, 0, 0);
-              const pngDataUrl = canvas.toDataURL('image/png');
-              doc.addImage(pngDataUrl, 'PNG', diagramX, diagramY, diagramWidth, diagramHeight);
-            }
-            
-            URL.revokeObjectURL(url);
-            resolve();
-          };
+          if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            const pngDataUrl = canvas.toDataURL('image/png');
+            doc.addImage(pngDataUrl, 'PNG', technicalX, diagramY, diagramWidth, diagramHeight);
+          }
           
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve();
-          };
-          
-          img.src = url;
-        });
+          URL.revokeObjectURL(url);
+          resolve();
+        };
         
-        // Add reference photo
-        try {
-          doc.addImage(door.referenceImage, 'JPEG', photoX, diagramY, diagramWidth, diagramHeight);
-          
-          // Labels
-          doc.setFontSize(7);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(0, 0, 0);
-          doc.text('Technical Drawing', diagramX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
-          doc.text('Door Photo', photoX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
-          
-          // Update yPos after diagrams
-          yPos = diagramY + diagramHeight + 15;
-          
-        } catch (photoError) {
-          console.error('Error adding reference photo:', photoError);
-          yPos = diagramY + diagramHeight + 15;
-        }
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
         
-      } else {
-        // Only technical diagram, centered
-        diagramX = (pageWidth - diagramWidth) / 2;
+        img.src = url;
+      });
+      
+      // Add Premium Elevation Diagram (right)
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        const svgBlob = new Blob([elevationSVG], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
         
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-          const url = URL.createObjectURL(svgBlob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 500;
+          canvas.height = 650;
+          const ctx = canvas.getContext('2d');
           
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 400;
-            canvas.height = 500;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx) {
-              ctx.fillStyle = 'white';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(img, 0, 0);
-              const pngDataUrl = canvas.toDataURL('image/png');
-              doc.addImage(pngDataUrl, 'PNG', diagramX, diagramY, diagramWidth, diagramHeight);
-            }
-            
-            URL.revokeObjectURL(url);
-            resolve();
-          };
+          if (ctx) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            const pngDataUrl = canvas.toDataURL('image/png');
+            doc.addImage(pngDataUrl, 'PNG', elevationX, diagramY, diagramWidth, diagramHeight);
+          }
           
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve();
-          };
-          
-          img.src = url;
-        });
+          URL.revokeObjectURL(url);
+          resolve();
+        };
         
-        // Add note below diagram
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(100, 100, 100);
-        doc.text('* Diagram not to scale', pageWidth / 2, diagramY + diagramHeight + 5, { align: 'center' });
-      }
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve();
+        };
+        
+        img.src = url;
+      });
+      
+      // Labels
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Technical View', technicalX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
+      doc.text('Elevation View', elevationX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
       
       // Update yPos after diagrams
       yPos = diagramY + diagramHeight + 15;
@@ -547,7 +504,7 @@ export const generateQuotationPDF = async (
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 100, 100);
-      doc.text('Technical diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
+      doc.text('Technical diagrams unavailable', pageWidth / 2, yPos, { align: 'center' });
       doc.setTextColor(0, 0, 0);
       yPos += 10;
     }
@@ -614,6 +571,172 @@ export const generateQuotationPDF = async (
       doc.setTextColor(0, 0, 0);
       yPos += 10;
     }
+    
+    // ===== DETAILED COST BREAKDOWN FOR THIS DOOR =====
+    if (yPos > pageHeight - 130) {
+      doc.addPage();
+      yPos = addMinimalHeader();
+    }
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text('COST BREAKDOWN', margin, yPos);
+    yPos += 8;
+    
+    // Cost Table Header
+    doc.setFillColor(0, 0, 0);
+    doc.setTextColor(255, 255, 255);
+    doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ITEM', margin + 2, yPos);
+    doc.text('SPECIFICATION', margin + 45, yPos);
+    doc.text('QTY/SIZE', margin + 100, yPos);
+    doc.text('COST', pageWidth - margin - 2, yPos, { align: 'right' });
+    
+    yPos += 7;
+    
+    // Cost breakdown rows
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setDrawColor(220, 220, 220);
+    
+    const costItems = [
+      {
+        item: 'Frame Profile',
+        spec: `${frameProfile?.name} (${frameProfile?.code})`,
+        qty: `${calc.totalProfileLength.toFixed(2)}m`,
+        cost: calc.frameCost
+      },
+    ];
+    
+    // Add handle if exists
+    if (door.hasHandle && handleProfile) {
+      costItems.push({
+        item: 'Handle Profile',
+        spec: `${handleProfile.name} (${handleProfile.code})`,
+        qty: `${calc.totalHandleLength?.toFixed(2) || 0}m`,
+        cost: calc.handleCost
+      });
+    }
+    
+    // Add glass
+    costItems.push({
+      item: 'Glass',
+      spec: `${glassType?.name} (${glassType?.code})`,
+      qty: `${calc.glassAreaWithWastage.toFixed(2)} sq.ft`,
+      cost: calc.glassCost
+    });
+    
+    // Add connectors
+    if (calc.connectorsRequired > 0) {
+      const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
+      costItems.push({
+        item: 'Connectors',
+        spec: `${connector?.name || 'Standard'} (${door.connectorCode})`,
+        qty: `${calc.connectorsRequired} pcs`,
+        cost: calc.connectorCost
+      });
+    }
+    
+    // Add hinges if applicable
+    if (calc.hingeCount && calc.hingeCount > 0) {
+      costItems.push({
+        item: 'Hinges',
+        spec: `${door.hingeCode || 'Standard'}`,
+        qty: `${calc.hingeCount} pcs`,
+        cost: calc.hingeCost
+      });
+    }
+    
+    // Add dividers if applicable
+    if (door.hasDividers && calc.dividerLength && calc.dividerLength > 0) {
+      costItems.push({
+        item: 'Dividers',
+        spec: `Profile + Connectors`,
+        qty: `${calc.dividerLength.toFixed(2)}m`,
+        cost: calc.dividerCost
+      });
+    }
+    
+    // Add sliding system if applicable
+    if (door.doorType === 'sliding' && calc.slidingSystemCost > 0) {
+      const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode);
+      costItems.push({
+        item: 'Sliding System',
+        spec: slidingSystem?.name || door.slidingSystemCode || 'Standard Kit',
+        qty: '1 set',
+        cost: calc.slidingSystemCost
+      });
+    }
+    
+    // Add gasket if applicable
+    if (calc.gasketCost > 0) {
+      costItems.push({
+        item: 'Gasket',
+        spec: door.gasketCode || 'Standard',
+        qty: `${calc.totalProfileLength.toFixed(2)}m`,
+        cost: calc.gasketCost
+      });
+    }
+    
+    // Add lock if applicable
+    if (calc.lockCost > 0) {
+      costItems.push({
+        item: 'Lock',
+        spec: door.lockCode || 'Standard',
+        qty: '1 pc',
+        cost: calc.lockCost
+      });
+    }
+    
+    // Render all cost items
+    costItems.forEach(item => {
+      if (yPos > pageHeight - 30) {
+        doc.addPage();
+        yPos = addMinimalHeader();
+      }
+      
+      doc.text(item.item, margin + 2, yPos);
+      doc.text(item.spec, margin + 45, yPos);
+      doc.text(item.qty, margin + 100, yPos);
+      doc.text(formatCurrency(item.cost), pageWidth - margin - 5, yPos, { align: 'right' });
+      
+      yPos += 5;
+      doc.setLineWidth(0.1);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 2;
+    });
+    
+    // Subtotal for this door
+    yPos += 3;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Cost Per Unit:', margin + 2, yPos);
+    doc.text(formatCurrency(calc.totalSellingPrice), pageWidth - margin - 5, yPos, { align: 'right' });
+    yPos += 6;
+    
+    doc.text(`Quantity:`, margin + 2, yPos);
+    doc.text(`× ${door.quantity}`, pageWidth - margin - 5, yPos, { align: 'right' });
+    yPos += 6;
+    
+    // Total line
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 6;
+    
+    // Total for this door
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    doc.setFontSize(10);
+    doc.text('Total for this Shutter:', margin + 2, yPos);
+    doc.text(formatCurrency(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
+    
+    yPos += 15;
+    doc.setFont('helvetica', 'normal');
     
     // Material Images Section - Show after diagrams for better visibility
     const connector = door.connectorCode ? masterData.connectorTypes.find(c => c.code === door.connectorCode) : undefined;
@@ -702,6 +825,230 @@ export const generateQuotationPDF = async (
     await processDoor(door);
   }
   
+  // ===== COMPREHENSIVE COST SUMMARY PAGE =====
+  
+  doc.addPage();
+  yPos = addMinimalHeader();
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COMPLETE COST SUMMARY', margin, yPos);
+  yPos += 2;
+  
+  doc.setLineWidth(0.5);
+  doc.line(margin, yPos, margin + 90, yPos);
+  yPos += 12;
+  
+  // Component-wise Breakdown
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('MATERIAL BREAKDOWN', margin, yPos);
+  yPos += 8;
+  
+  doc.setFillColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COMPONENT', margin + 2, yPos);
+  doc.text('AMOUNT', pageWidth - margin - 2, yPos, { align: 'right' });
+  
+  yPos += 7;
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setDrawColor(220, 220, 220);
+  
+  const componentBreakdown = [
+    { name: 'Frame Profiles', amount: costSummary.totalProfileCost },
+    { name: 'Handle Profiles', amount: costSummary.totalHandleCost },
+    { name: 'Glass', amount: costSummary.totalGlassCost },
+    { name: 'Connectors', amount: costSummary.totalConnectorCost },
+    { name: 'Hinges', amount: costSummary.totalHingeCost },
+    { name: 'Locks', amount: costSummary.totalLockCost },
+    { name: 'Gaskets', amount: costSummary.totalGasketCost },
+    { name: 'Sliding Systems', amount: costSummary.totalSlidingSystemCost },
+    { name: 'Dividers', amount: costSummary.totalDividerCost },
+  ];
+  
+  // Only show components with non-zero amounts
+  componentBreakdown.forEach(item => {
+    if (item.amount > 0) {
+      doc.text(item.name, margin + 2, yPos);
+      doc.text(formatCurrency(item.amount), pageWidth - margin - 5, yPos, { align: 'right' });
+      yPos += 5;
+      doc.setLineWidth(0.1);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 2;
+    }
+  });
+  
+  // Material Subtotal
+  yPos += 3;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Material Subtotal:', margin + 2, yPos);
+  doc.text(formatCurrency(costSummary.materialSubtotal), pageWidth - margin - 5, yPos, { align: 'right' });
+  yPos += 8;
+  
+  // Additional & Optional Items
+  if (quotation.additionalComponents.length > 0 || quotation.optionalItems.length > 0) {
+    doc.setFontSize(10);
+    doc.text('ADDITIONAL ITEMS', margin, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    
+    if (costSummary.totalAdditionalCost > 0) {
+      doc.text('Additional Components', margin + 2, yPos);
+      doc.text(formatCurrency(costSummary.totalAdditionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
+      yPos += 5;
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 2;
+    }
+    
+    if (costSummary.totalOptionalCost > 0) {
+      doc.text('Optional Items', margin + 2, yPos);
+      doc.text(formatCurrency(costSummary.totalOptionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
+      yPos += 5;
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 2;
+    }
+    
+    yPos += 5;
+  }
+  
+  // Making Charges
+  yPos += 2;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('FABRICATION CHARGES', margin, yPos);
+  yPos += 8;
+  
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Making Charges', margin + 2, yPos);
+  doc.text(formatCurrency(costSummary.makingCharges), pageWidth - margin - 5, yPos, { align: 'right' });
+  yPos += 5;
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 2;
+  
+  // Subtotal with Making
+  yPos += 3;
+  doc.setFont('helvetica', 'bold');
+  doc.text('Subtotal (with Fabrication):', margin + 2, yPos);
+  doc.text(formatCurrency(costSummary.subtotalWithMaking), pageWidth - margin - 5, yPos, { align: 'right' });
+  yPos += 10;
+  
+  // Discount Section
+  doc.setFillColor(240, 250, 240);
+  doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 12, 'FD');
+  
+  doc.setFontSize(9);
+  if (costSummary.discount > 0) {
+    doc.setTextColor(0, 150, 0);
+    doc.text(`Discount (${quotation.globalDiscount}%)`, margin + 2, yPos);
+    doc.text(`- ${formatCurrency(costSummary.discount)}`, pageWidth - margin - 5, yPos, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    yPos += 7;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text('Taxable Amount:', margin + 2, yPos);
+    doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  } else {
+    doc.text('Taxable Amount:', margin + 2, yPos);
+    doc.text(formatCurrency(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  }
+  
+  yPos += 10;
+  
+  // GST Section
+  doc.setFillColor(245, 245, 250);
+  doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'FD');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.text(`GST (${quotation.gstPercentage}%)`, margin + 2, yPos);
+  doc.text(formatCurrency(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  
+  yPos += 12;
+  
+  // Final Amount - Highlighted
+  doc.setLineWidth(1);
+  doc.line(margin, yPos, pageWidth - margin, yPos);
+  yPos += 8;
+  
+  doc.setFillColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 12, 'F');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('TOTAL PAYABLE', margin + 2, yPos);
+  doc.text(formatCurrency(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
+  
+  yPos += 15;
+  doc.setTextColor(0, 0, 0);
+  
+  // Savings Message
+  if (costSummary.totalSavings > 0) {
+    doc.setTextColor(0, 150, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      `★ Total Savings: ${formatCurrency(costSummary.totalSavings)} ★`,
+      pageWidth / 2,
+      yPos,
+      { align: 'center' }
+    );
+    doc.setTextColor(0, 0, 0);
+    yPos += 10;
+  }
+  
+  // Door-wise Summary Table
+  yPos += 5;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DOOR-WISE SUMMARY', margin, yPos);
+  yPos += 8;
+  
+  doc.setFillColor(0, 0, 0);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
+  
+  doc.setFontSize(8);
+  doc.text('DOOR NAME', margin + 2, yPos);
+  doc.text('QTY', margin + 70, yPos);
+  doc.text('PER UNIT', margin + 95, yPos);
+  doc.text('TOTAL', pageWidth - margin - 2, yPos, { align: 'right' });
+  
+  yPos += 7;
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+  
+  quotation.doors.forEach((door, index) => {
+    const calc = doorCalculations.find(c => c.doorId === door.id);
+    if (!calc) return;
+    
+    if (yPos > pageHeight - 40) {
+      doc.addPage();
+      yPos = addMinimalHeader();
+    }
+    
+    doc.text(door.doorName, margin + 2, yPos);
+    doc.text(door.quantity.toString(), margin + 70, yPos);
+    doc.text(formatCurrency(calc.totalSellingPrice), margin + 95, yPos);
+    doc.text(formatCurrency(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
+    
+    yPos += 5;
+    doc.setLineWidth(0.1);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 2;
+  });
+  
   // ===== FINAL PAGE: TERMS & CONDITIONS =====
   
   doc.addPage();
@@ -758,18 +1105,21 @@ export const generateQuotationPDF = async (
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('50% advance payment required before fabrication. Balance due upon delivery.', margin, yPos);
+  const paymentText = '50% advance payment required before fabrication. Balance 50% due upon delivery and before installation.';
+  doc.text(paymentText, margin, yPos);
   yPos += 10;
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('5. Delivery', margin, yPos);
+  doc.text('5. Delivery Timeline', margin, yPos);
   yPos += 5;
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('Delivery timeline will be communicated separately. Subject to material availability and site readiness.', margin, yPos);
-  yPos += 10;
+  const deliveryText = 'Standard delivery timeline is 7-10 working days from advance payment clearance. Subject to material availability and site readiness. Custom orders may require additional time.';
+  const deliveryLines = doc.splitTextToSize(deliveryText, pageWidth - 2 * margin);
+  doc.text(deliveryLines, margin, yPos);
+  yPos += deliveryLines.length * 4 + 8;
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
@@ -788,20 +1138,22 @@ export const generateQuotationPDF = async (
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('1-year warranty on manufacturing defects. Does not cover damage from mishandling or improper installation.', margin, yPos);
-  yPos += 10;
+  const warrantyText = '1-year warranty on manufacturing defects. Warranty does not cover damage from mishandling, improper installation, or natural wear and tear.';
+  const warrantyLines = doc.splitTextToSize(warrantyText, pageWidth - 2 * margin);
+  doc.text(warrantyLines, margin, yPos);
+  yPos += warrantyLines.length * 4 + 8;
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('8. Confidentiality', margin, yPos);
+  doc.text('8. Scope of Work', margin, yPos);
   yPos += 5;
   
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  const confidentialText = 'This quotation is for internal business use only. It includes detailed fabrication specifications and should not be shared with external parties without authorization.';
-  const confidentialLines = doc.splitTextToSize(confidentialText, pageWidth - 2 * margin);
-  doc.text(confidentialLines, margin, yPos);
-  yPos += confidentialLines.length * 4 + 15;
+  const scopeText = 'This quotation covers supply of materials and fabrication only. Installation, site preparation, structural modifications, and transportation are quoted separately unless explicitly mentioned.';
+  const scopeLines = doc.splitTextToSize(scopeText, pageWidth - 2 * margin);
+  doc.text(scopeLines, margin, yPos);
+  yPos += scopeLines.length * 4 + 15;
   
   // Contact Section
   doc.setDrawColor(0, 0, 0);

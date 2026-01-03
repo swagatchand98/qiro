@@ -397,9 +397,24 @@ export const calculateDoorCosts = (
   // AUTO-CALCULATE: Sliding system cost (for sliding doors)
   let slidingSystemCost = 0;
   if (door.doorType === 'sliding' && door.slidingSystemCode) {
-    const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
-    const slidingPricePerMeter = slidingSystem?.pricePerMeter || slidingSystem?.sellingPrice || 0;
-    slidingSystemCost = (widthMm / 1000) * slidingPricePerMeter * door.quantity;
+    // First check in sliding bundles
+    const slidingBundle = masterData.slidingBundles?.find(b => b.code === door.slidingSystemCode);
+    if (slidingBundle) {
+      // For bundles, use pricePerDoor if available, otherwise use sellingPrice as fixed price per door
+      if (slidingBundle.pricePerDoor) {
+        slidingSystemCost = slidingBundle.pricePerDoor * door.quantity;
+      } else if (slidingBundle.pricePerMeter) {
+        slidingSystemCost = (widthMm / 1000) * slidingBundle.pricePerMeter * door.quantity;
+      } else {
+        // Use sellingPrice as fixed price per door
+        slidingSystemCost = slidingBundle.sellingPrice * door.quantity;
+      }
+    } else {
+      // Fallback to old products for backward compatibility
+      const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
+      const slidingPricePerMeter = slidingSystem?.pricePerMeter || slidingSystem?.sellingPrice || 0;
+      slidingSystemCost = (widthMm / 1000) * slidingPricePerMeter * door.quantity;
+    }
   }
   
   // Calculate cutting scheme (for reference)

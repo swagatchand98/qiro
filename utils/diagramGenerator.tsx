@@ -810,14 +810,14 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
             width="${scaledWidth - 2 * frameThickness}" height="${scaledHeight - 2 * frameThickness}" 
             fill="none" stroke="#000" stroke-width="2"/>
       
-      <!-- Third line on handle side -->
+      <!-- Third line on handle side (scaled properly with frame thickness) -->
       ${handleSideIsLeft ? `
-        <line x1="${offsetX + frameInnerGap + 3}" y1="${offsetY}" 
-              x2="${offsetX + frameInnerGap + 3}" y2="${offsetY + scaledHeight}" 
+        <line x1="${offsetX + frameThickness / 2}" y1="${offsetY}" 
+              x2="${offsetX + frameThickness / 2}" y2="${offsetY + scaledHeight}" 
               stroke="#000" stroke-width="1.5"/>
       ` : handleSideIsRight ? `
-        <line x1="${offsetX + scaledWidth - 6}" y1="${offsetY}" 
-              x2="${offsetX + scaledWidth - 6}" y2="${offsetY + scaledHeight}" 
+        <line x1="${offsetX + scaledWidth - frameThickness / 2}" y1="${offsetY}" 
+              x2="${offsetX + scaledWidth - frameThickness / 2}" y2="${offsetY + scaledHeight}" 
               stroke="#000" stroke-width="1.5"/>
       ` : ''}
       
@@ -969,26 +969,24 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
         </text>
       </g>
       
-      <!-- Full-length handle with minimal callout -->
+      <!-- Handle callout (no visible handle bar, just label) -->
       ${door.hasHandle ? `
         <g>
-          <!-- Handle bar -->
-          <rect x="${handleX - 3}" y="${handleYTop}" width="6" height="${handleYBottom - handleYTop}" 
-                fill="#FFD700" stroke="#000" stroke-width="1.5" rx="3"/>
-          
-          <!-- Handle callout -->
-          <line x1="${handleX + (door.handlePosition === 'right' ? -8 : 8)}" y1="${(handleYTop + handleYBottom) / 2 - 10}" 
-                x2="${handleX + (door.handlePosition === 'right' ? -45 : 45)}" y2="${(handleYTop + handleYBottom) / 2 - 10}" 
+          <!-- Handle callout line -->
+          <line x1="${handleX + (door.handlePosition === 'right' ? -8 : 8)}" y1="${(handleYTop + handleYBottom) / 2}" 
+                x2="${handleX + (door.handlePosition === 'right' ? -45 : 45)}" y2="${(handleYTop + handleYBottom) / 2}" 
                 stroke="#B8860B" stroke-width="0.8"/>
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 13}" 
+          
+          <!-- Handle label -->
+          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 10}" 
                 text-anchor="middle" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#B8860B">
             HANDLE
           </text>
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 }" 
+          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 + 3}" 
                 text-anchor="middle" font-size="7" font-family="Arial, sans-serif" fill="#666">
             ${handleProfile?.name || 'Full Length'}
           </text>
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 6.5}" 
+          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 3.5}" 
                 text-anchor="middle" font-size="7" font-family="Arial, sans-serif" fill="#666">
             ${handleProfile?.code || 'HP001'}
           </text>

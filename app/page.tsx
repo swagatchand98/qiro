@@ -25,8 +25,10 @@ import {
   convertToMm,
 } from '../utils/calculations';
 import { DoorDiagram, generatePremiumElevationSVG } from '../utils/diagramGenerator';
-import { generateQuotationPDF, generateCuttingSchemaPDF } from '../utils/pdfGenerator';
+import { generateQuotationPDF, generateCuttingSchemaPDF, generateQuotationId } from '../utils/pdfGenerator';
 import { exportToExcel, exportToText, saveQuotationToLocalStorage } from '../utils/exportUtils';
+import { saveMasterDataToFirestore, loadMasterDataFromFirestore, checkFirestoreConfigExists } from '../lib/firestore';
+import { isConfigured as isFirebaseConfigured } from '../lib/firebase';
 import type { MasterData, FrameProfile, HandleProfile, GlassType, ConnectorType, Product, ProductType, DoorTypeCompatibility, DividerMode, MakingChargeType, PricingSettings } from '../types';
 
 // Helper function to calculate hinge positions
@@ -90,6 +92,10 @@ export default function Home() {
   const [editingSlidingBundle, setEditingSlidingBundle] = useState<SlidingBundle | null>(null);
   const [isAddingSlidingBundle, setIsAddingSlidingBundle] = useState(false);
   
+  // Firestore sync state
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  
   // Editable master data - initialize with defaults to avoid hydration mismatch
   const [masterData, setMasterData] = useState<MasterData>(defaultMasterData);
 
@@ -116,7 +122,61 @@ export default function Home() {
     setSettingsOpen(false);
   };
 
-  // Load from localStorage after mount (client-side only)
+  // Auto-load from Firestore on mount
+  useEffect(() => {
+    const autoLoadFromFirestore = async () => {
+      if (!isFirebaseConfigured) {
+        // Fallback to localStorage if Firebase not configured
+        const saved = localStorage.getItem('qiro_master_data');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setMasterData(parsed);
+          } catch (error) {
+            console.error('Failed to parse localStorage data:', error);
+          }
+        }
+        return;
+      }
+
+      try {
+        setSyncStatus('syncing');
+        const result = await loadMasterDataFromFirestore();
+        
+        if (result.success && result.data) {
+          setMasterData(result.data);
+          localStorage.setItem('qiro_master_data', JSON.stringify(result.data));
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } else {
+          // If no cloud data, try localStorage
+          const saved = localStorage.getItem('qiro_master_data');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            setMasterData(parsed);
+          }
+          setSyncStatus('idle');
+        }
+      } catch (error) {
+        console.error('Auto-load from Firestore failed:', error);
+        setSyncStatus('error');
+        // Fallback to localStorage
+        const saved = localStorage.getItem('qiro_master_data');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setMasterData(parsed);
+          } catch (e) {
+            console.error('Failed to parse localStorage data:', e);
+          }
+        }
+      }
+    };
+
+    autoLoadFromFirestore();
+  }, []);
+
+  // Load from localStorage after mount (client-side only) - LEGACY BACKUP
   useEffect(() => {
     const saved = localStorage.getItem('qiro_master_data');
     if (saved) {
@@ -614,6 +674,34 @@ export default function Home() {
     }
   };
 
+  // Save configuration to Firestore
+  const handleSaveToFirestore = async () => {
+    if (!isFirebaseConfigured) {
+      alert('Firebase is not configured. Please set up your .env.local file.');
+      return;
+    }
+
+    try {
+      setSyncStatus('syncing');
+      const result = await saveMasterDataToFirestore(masterData);
+      
+      if (result.success) {
+        localStorage.setItem('qiro_master_data', JSON.stringify(masterData));
+        setSyncStatus('synced');
+        setLastSyncTime(new Date());
+      } else {
+        setSyncStatus('error');
+        alert(`Failed to save: ${result.error}`);
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      }
+    } catch (error) {
+      console.error('Save failed:', error);
+      setSyncStatus('error');
+      alert('Failed to save configuration to cloud');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Settings Button - Fixed Position */}
@@ -690,15 +778,89 @@ export default function Home() {
           {/* Sidebar Panel */}
           <div className="fixed right-0 top-0 h-full w-full md:w-2/3 lg:w-1/2 bg-white border-l border-gray-200 z-50 overflow-y-auto">
             <div className="p-6">
-              {/* Header */}
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-black">Settings & Master Data</h2>
-              <button
-                onClick={handleCloseSettings}
-                className="text-gray-400 hover:text-black text-2xl font-light w-8 h-8 flex items-center justify-center"
-                >×
-                </button>
+              {/* Header with Save Button and Sync Status */}
+              <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
+                <div>
+                  <h2 className="text-2xl font-bold text-black">Settings & Master Data</h2>
+                  <p className="text-sm text-gray-500 mt-1">Manage your system configuration</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Sync Status Indicator */}
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                    {syncStatus === 'syncing' && (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="text-sm text-gray-700">Syncing...</span>
+                      </>
+                    )}
+                    {syncStatus === 'synced' && (
+                      <>
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-gray-700">
+                          {lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'Synced'}
+                        </span>
+                      </>
+                    )}
+                    {syncStatus === 'error' && (
+                      <>
+                        <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-red-600">Sync Error</span>
+                      </>
+                    )}
+                    {syncStatus === 'idle' && (
+                      <>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                        </svg>
+                        <span className="text-sm text-gray-500">Not synced</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    onClick={handleSaveToFirestore}
+                    disabled={syncStatus === 'syncing' || !isFirebaseConfigured}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    {syncStatus === 'syncing' ? 'Saving...' : 'Save Changes'}
+                  </button>
+
+                  {/* Close Button */}
+                  <button
+                    onClick={handleCloseSettings}
+                    className="text-gray-400 hover:text-black text-2xl font-light w-8 h-8 flex items-center justify-center"
+                  >×
+                  </button>
+                </div>
               </div>
+
+              {/* Firebase Configuration Warning */}
+              {!isFirebaseConfigured && (
+                <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                      <h3 className="text-sm font-semibold text-yellow-800">Firebase Not Configured</h3>
+                      <p className="text-sm text-yellow-700 mt-1">
+                        Cloud sync is disabled. Create a <code className="bg-yellow-100 px-1 rounded">.env.local</code> file with your Firebase credentials to enable auto-sync. See <code className="bg-yellow-100 px-1 rounded">SETUP_CHECKLIST.md</code> for details.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs */}
               <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200">
@@ -2426,11 +2588,16 @@ export default function Home() {
               <input
                 type="text"
                 value={quotation.clientName}
-                onChange={e => setQuotation(prev => ({ 
-                  ...prev, 
-                  clientName: e.target.value,
-                  customerName: e.target.value // Keep legacy field in sync
-                }))}
+                onChange={e => {
+                  const newName = e.target.value;
+                  const newId = newName ? generateQuotationId(newName, quotation.quoteDate) : uuidv4();
+                  setQuotation(prev => ({ 
+                    ...prev, 
+                    clientName: newName,
+                    customerName: newName, // Keep legacy field in sync
+                    id: newId
+                  }));
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 placeholder="Enter client name"
               />
@@ -2522,11 +2689,16 @@ export default function Home() {
               <input
                 type="date"
                 value={quotation.quoteDate}
-                onChange={e => setQuotation(prev => ({ 
-                  ...prev, 
-                  quoteDate: e.target.value,
-                  date: e.target.value // Keep legacy field in sync
-                }))}
+                onChange={e => {
+                  const newDate = e.target.value;
+                  const newId = quotation.clientName ? generateQuotationId(quotation.clientName, newDate) : uuidv4();
+                  setQuotation(prev => ({ 
+                    ...prev, 
+                    quoteDate: newDate,
+                    date: newDate, // Keep legacy field in sync
+                    id: newId
+                  }));
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               />
             </div>
@@ -2728,15 +2900,16 @@ export default function Home() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Glass Type * {filteredOptions.glassTypes.length < masterData.glassTypes.length && (
+                    Glass Type {filteredOptions.glassTypes.length < masterData.glassTypes.length && (
                       <span className="text-xs text-gray-500">(filtered by frame)</span>
                     )}
                   </label>
                   <select
-                    value={currentDoor.glassTypeCode}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, glassTypeCode: e.target.value }))}
+                    value={currentDoor.glassTypeCode || ''}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, glassTypeCode: e.target.value || undefined }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   >
+                    <option value="">None (No Glass)</option>
                     {filteredOptions.glassTypes.map(glass => (
                       <option key={glass.code} value={glass.code}>
                         {glass.name} - {formatCurrency(glass.pricePerSqFt)}/sqft
@@ -3662,7 +3835,7 @@ export default function Home() {
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
             Configuration
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                 GST %
@@ -3679,21 +3852,7 @@ export default function Home() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Glass Wastage %
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={quotation.glassWastagePercentage}
-                onChange={e => setQuotation(prev => ({ ...prev, glassWastagePercentage: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Global Discount %
+                Discount %
               </label>
               <input
                 type="number"
@@ -3716,55 +3875,124 @@ export default function Home() {
               Cutting Schemes
             </h2>
             <div className="space-y-6">
-              {quotation.doors.map((door, index) => {
-                const calc = doorCalculations[index];
-                if (!calc) return null;
-                
+              {(() => {
+                // Group doors by frame profile code
+                const frameProfileGroups = quotation.doors.reduce((groups, door, index) => {
+                  const key = door.frameProfileCode;
+                  if (key) {
+                    if (!groups[key]) {
+                      groups[key] = [];
+                    }
+                    groups[key].push({ door, index });
+                  }
+                  return groups;
+                }, {} as Record<string, Array<{ door: DoorConfiguration; index: number }>>);
+
+                // Group doors by handle profile code
+                const handleProfileGroups = quotation.doors.reduce((groups, door, index) => {
+                  if (door.handleProfileCode) {
+                    const key = door.handleProfileCode;
+                    if (!groups[key]) {
+                      groups[key] = [];
+                    }
+                    groups[key].push({ door, index });
+                  }
+                  return groups;
+                }, {} as Record<string, Array<{ door: DoorConfiguration; index: number }>>);
+
                 return (
-                  <div key={door.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                    <h3 className="font-semibold text-lg text-black mb-3">{door.doorName}</h3>
-                    
-                    {/* Frame Profile Info */}
-                    <div className="mb-3">
-                      <p className="text-sm text-gray-600 mb-1">
-                        Frame Profile: {masterData.frameProfiles.find(f => f.code === door.frameProfileCode)?.name || 'N/A'}
-                      </p>
-                      <p className="text-sm font-semibold text-gray-800">Cutting Scheme Frame - {door.quantity}X</p>
-                    </div>
-                    
-                    {/* Visual Cutting Scheme */}
-                    <div className="mb-4">
-                      <div className="flex items-center gap-1 mb-2">
-                        {[...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces].map((length, idx) => {
-                          const maxLength = Math.max(...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces);
-                          const widthPercent = (length / maxLength) * 100;
+                  <>
+                    {/* Frame Profile Cutting Schemes */}
+                    {Object.entries(frameProfileGroups).map(([profileCode, doors]) => {
+                      const firstDoor = doors[0];
+                      const calc = doorCalculations[firstDoor.index];
+                      if (!calc) return null;
+
+                      const profile = masterData.frameProfiles.find(f => f.code === profileCode);
+                      const totalQuantity = doors.reduce((sum, { door }) => sum + door.quantity, 0);
+                      const doorNames = doors.map(({ door }) => door.doorName).join(', ');
+
+                      return (
+                        <div key={`frame-${profileCode}`} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <h3 className="font-semibold text-lg text-black mb-3">Frame Profile: {profile?.name || 'N/A'}</h3>
                           
-                          return (
-                            <div
-                              key={idx}
-                              className="bg-gradient-to-r from-amber-700 to-amber-600 text-white text-center py-3 rounded flex items-center justify-center font-semibold text-sm border-2 border-amber-800"
-                              style={{ width: `${Math.max(widthPercent, 15)}%` }}
-                            >
-                              {length}
+                          {/* Doors using this profile */}
+                          <div className="mb-3">
+                            <p className="text-sm text-gray-600 mb-1">
+                              Used in: {doorNames}
+                            </p>
+                            <p className="text-sm font-semibold text-gray-800">Cutting Scheme Frame - {totalQuantity}X (Total Quantity)</p>
+                          </div>
+                          
+                          {/* Visual Cutting Scheme */}
+                          <div className="mb-4">
+                            <div className="flex items-center gap-1 mb-2">
+                              {[...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces].map((length, idx) => {
+                                const maxLength = Math.max(...calc.cuttingScheme.frameVerticalPieces, ...calc.cuttingScheme.frameHorizontalPieces);
+                                const widthPercent = (length / maxLength) * 100;
+                                
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="bg-gradient-to-r from-amber-700 to-amber-600 text-white text-center py-3 rounded flex items-center justify-center font-semibold text-sm border-2 border-amber-800"
+                                    style={{ width: `${Math.max(widthPercent, 15)}%` }}
+                                  >
+                                    {length}
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-gray-500">Total Frame Length: {calc.cuttingScheme.totalFrameLength} mm</p>
-                    </div>
-                    
-                    {/* Handle Profile Info */}
-                    {door.handleProfileCode && (
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Handle Profile: {masterData.handleProfiles.find(h => h.code === door.handleProfileCode)?.name || 'N/A'}
-                        </p>
-                        <p className="text-sm font-semibold text-gray-800">Cutting Scheme Handle - {calc.cuttingScheme.handlePieces.length > 0 ? calc.cuttingScheme.totalHandleLength : 0}</p>
-                      </div>
-                    )}
-                  </div>
+                            <p className="text-xs text-gray-500">Total Frame Length per unit: {calc.cuttingScheme.totalFrameLength} mm</p>
+                            <p className="text-xs text-gray-500 font-semibold">Total Frame Length for all units: {calc.cuttingScheme.totalFrameLength * totalQuantity} mm</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Handle Profile Cutting Schemes */}
+                    {Object.entries(handleProfileGroups).map(([profileCode, doors]) => {
+                      const firstDoor = doors[0];
+                      const calc = doorCalculations[firstDoor.index];
+                      if (!calc || calc.cuttingScheme.handlePieces.length === 0) return null;
+
+                      const profile = masterData.handleProfiles.find(h => h.code === profileCode);
+                      const totalQuantity = doors.reduce((sum, { door }) => sum + door.quantity, 0);
+                      const doorNames = doors.map(({ door }) => door.doorName).join(', ');
+
+                      return (
+                        <div key={`handle-${profileCode}`} className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+                          <h3 className="font-semibold text-lg text-black mb-3">Handle Profile: {profile?.name || 'N/A'}</h3>
+                          
+                          {/* Doors using this profile */}
+                          <div className="mb-3">
+                            <p className="text-sm text-gray-600 mb-1">
+                              Used in: {doorNames}
+                            </p>
+                            <p className="text-sm font-semibold text-gray-800">Cutting Scheme Handle - {totalQuantity}X (Total Quantity)</p>
+                          </div>
+                          
+                          {/* Visual Cutting Scheme */}
+                          <div className="mb-4">
+                            <div className="flex items-center gap-1 mb-2">
+                              {calc.cuttingScheme.handlePieces.map((length, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-gradient-to-r from-blue-700 to-blue-600 text-white text-center py-3 rounded flex items-center justify-center font-semibold text-sm border-2 border-blue-800"
+                                  style={{ width: '100%' }}
+                                >
+                                  {length}
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-500">Total Handle Length per unit: {calc.cuttingScheme.totalHandleLength} mm</p>
+                            <p className="text-xs text-gray-500 font-semibold">Total Handle Length for all units: {calc.cuttingScheme.totalHandleLength * totalQuantity} mm</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </section>
         )}

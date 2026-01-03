@@ -11,9 +11,89 @@ import {
   formatDate,
   calculateDoorCosts,
   calculateCostSummary,
+  convertToMm,
 } from './calculations';
 import { generatePremiumElevationSVG } from './diagramGenerator';
 import { generateCuttingSchemaeSVG } from './cuttingSchemaGenerator';
+
+// Helper function to calculate hinge positions
+function calculateHingePositions(heightMm: number, hingeQuantity: number): number[] {
+  if (!heightMm || !hingeQuantity || hingeQuantity < 2) return [];
+  
+  // For very small heights, use proportional positioning
+  if (heightMm < 500) {
+    const margin = heightMm * 0.15; // 15% margin from top and bottom
+    if (hingeQuantity === 2) {
+      return [margin, heightMm - margin];
+    } else {
+      const positions: number[] = [];
+      const availableHeight = heightMm - (2 * margin);
+      const spacing = availableHeight / (hingeQuantity - 1);
+      for (let i = 0; i < hingeQuantity; i++) {
+        positions.push(margin + (spacing * i));
+      }
+      return positions;
+    }
+  }
+  
+  // For normal heights, use fixed 200mm margins
+  const topMargin = 200; // 200mm from top
+  const bottomMargin = 200; // 200mm from bottom
+  const availableHeight = heightMm - topMargin - bottomMargin;
+  
+  if (hingeQuantity === 2) {
+    return [topMargin, heightMm - bottomMargin];
+  } else {
+    const positions: number[] = [];
+    const spacing = availableHeight / (hingeQuantity - 1);
+    for (let i = 0; i < hingeQuantity; i++) {
+      positions.push(topMargin + (spacing * i));
+    }
+    return positions;
+  }
+}
+
+// Helper function to ensure hinge positions are calculated
+const ensureHingePositions = (door: DoorConfiguration): DoorConfiguration => {
+  // ALWAYS recalculate to ensure fresh, accurate positions based on current door dimensions
+  const heightMm = convertToMm(door.height, door.measurementUnit);
+  const hingeQty = door.hingeQuantity || 2;
+  
+  if (heightMm > 0 && hingeQty >= 2) {
+    const positions = calculateHingePositions(heightMm, hingeQty);
+    console.log(`PDF: Calculated ${hingeQty} hinge positions for ${heightMm}mm height:`, positions);
+    return {
+      ...door,
+      hingePositionMm: positions // Force override with freshly calculated positions
+    };
+  }
+  
+  console.log(`PDF: No hinge positions calculated (height: ${heightMm}mm, qty: ${hingeQty})`);
+  return door;
+};
+
+// Generate short, readable quotation ID
+export const generateQuotationId = (customerName: string, date: string): string => {
+  // Extract first 3-4 letters of customer name
+  const namePart = customerName
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .substring(0, 4)
+    .padEnd(4, 'X');
+  
+  // Format date as DDMMYY
+  const dateObj = new Date(date);
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = String(dateObj.getFullYear()).substring(2);
+  const datePart = `${day}${month}${year}`;
+  
+  // Add random 2-digit number for uniqueness
+  const randomPart = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+  
+  return `${namePart}-${datePart}-${randomPart}`;
+};
 
 export const generateQuotationPDF = async (
   quotation: QuotationData,
@@ -150,7 +230,7 @@ export const generateQuotationPDF = async (
   doc.setFont('helvetica', 'bold');
   doc.text('Address:', margin, yPos);
   doc.setFont('helvetica', 'normal');
-  const addressText = doc.splitTextToSize(quotation.address, pageWidth - margin * 2 - 25);
+  const addressText = doc.splitTextToSize(quotation.address, 80);
   doc.text(addressText, margin + 25, yPos);
   yPos += addressText.length * 5 + 10;
   
@@ -508,7 +588,7 @@ export const generateQuotationPDF = async (
       
       yPos += 5;
       doc.setLineWidth(0.1);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
+      doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
       yPos += 2;
     });
     
@@ -553,7 +633,16 @@ export const generateQuotationPDF = async (
     
     // Generate premium elevation SVG diagram
     try {
-      const elevationSVG = generatePremiumElevationSVG(door);
+      // Ensure hinge positions are properly calculated (same as web page)
+      const doorWithHinges = ensureHingePositions(door);
+      
+      // Debug logging
+      console.log('PDF Door dimensions:', door.width, 'x', door.height, door.measurementUnit);
+      console.log('PDF Hinge positions (original):', door.hingePositionMm);
+      console.log('PDF Hinge positions (calculated):', doorWithHinges.hingePositionMm);
+      console.log('PDF Hinge quantity:', door.hingeQuantity);
+      
+      const elevationSVG = generatePremiumElevationSVG(doorWithHinges);
       
       // Diagram dimensions - centered on page
       const diagramWidth = 90;
@@ -793,7 +882,7 @@ export const generateQuotationPDF = async (
   doc.text('COMPLETE COST SUMMARY', margin, yPos);
   yPos += 2;
   
-  doc.setLineWidth(0.5);
+  doc.setLineWidth(0.2);
   doc.line(margin, yPos, margin + 90, yPos);
   yPos += 12;
   
@@ -838,7 +927,7 @@ export const generateQuotationPDF = async (
       doc.text(formatCurrencyForPDF(item.amount), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
       doc.setLineWidth(0.1);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
+      doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
       yPos += 2;
     }
   });
@@ -863,7 +952,7 @@ export const generateQuotationPDF = async (
       doc.text('Additional Components', margin + 2, yPos);
       doc.text(formatCurrencyForPDF(costSummary.totalAdditionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
-      doc.line(margin, yPos, pageWidth - margin, yPos);
+      doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
       yPos += 2;
     }
     
@@ -871,7 +960,7 @@ export const generateQuotationPDF = async (
       doc.text('Optional Items', margin + 2, yPos);
       doc.text(formatCurrencyForPDF(costSummary.totalOptionalCost), pageWidth - margin - 5, yPos, { align: 'right' });
       yPos += 5;
-      doc.line(margin, yPos, pageWidth - margin, yPos);
+      doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
       yPos += 2;
     }
     
@@ -890,7 +979,7 @@ export const generateQuotationPDF = async (
   doc.text('Making Charges', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.makingCharges), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 5;
-  doc.line(margin, yPos, pageWidth - margin, yPos);
+  doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
   yPos += 2;
   
   // Subtotal with Making
@@ -1002,7 +1091,7 @@ export const generateQuotationPDF = async (
     
     yPos += 5;
     doc.setLineWidth(0.1);
-    doc.line(margin, yPos, pageWidth - margin, yPos);
+    doc.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
     yPos += 2;
   });
   
@@ -1327,7 +1416,7 @@ export const generateQuotationPDF = async (
   );
   
   // Save PDF
-  doc.save(`Quotation_${quotation.id}_${quotation.customerName.replace(/\s+/g, '_')}.pdf`);
+  doc.save(`${quotation.id}.pdf`);
 };
 
 // ===== CUTTING SCHEMA PDF (FOR STAFF ONLY) =====
@@ -1584,5 +1673,5 @@ export const generateCuttingSchemaPDF = async (
   );
 
   // Save PDF
-  doc.save(`CuttingSchema_${quotation.id}_${quotation.customerName.replace(/\s+/g, '_')}.pdf`);
+  doc.save(`${quotation.id}_CuttingSchema.pdf`);
 };

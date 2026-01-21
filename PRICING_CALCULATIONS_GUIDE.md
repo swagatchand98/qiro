@@ -645,7 +645,7 @@ The QIRO pricing system provides:
 ✅ **Wastage handling** - Accurate glass area calculation
 ✅ **Tax compliance** - GST calculation built-in
 
-For questions or custom pricing requirements, modify the settings in the Settings panel (password: admin123).
+For questions or custom pricing requirements, modify the settings in the Settings panel .
 
 ---
 

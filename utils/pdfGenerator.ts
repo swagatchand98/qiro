@@ -106,6 +106,40 @@ export const generateQuotationPDF = async (
   const margin = 20;
   let yPos = margin;
 
+  // Load custom font - Neue Haas Display
+  const loadCustomFont = async () => {
+    try {
+      // Load Medium variant for normal text (better rendering)
+      const response = await fetch('/font/NeueHaasDisplayMediu.ttf');
+      const fontBuffer = await response.arrayBuffer();
+      const fontBase64 = btoa(
+        new Uint8Array(fontBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      doc.addFileToVFS('NeueHaasDisplay-Medium.ttf', fontBase64);
+      doc.addFont('NeueHaasDisplay-Medium.ttf', 'NeueHaasDisplay', 'normal');
+      
+      // Load Bold variant
+      const responseBold = await fetch('/font/NeueHaasDisplayBold.ttf');
+      const fontBufferBold = await responseBold.arrayBuffer();
+      const fontBase64Bold = btoa(
+        new Uint8Array(fontBufferBold).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      doc.addFileToVFS('NeueHaasDisplay-Bold.ttf', fontBase64Bold);
+      doc.addFont('NeueHaasDisplay-Bold.ttf', 'NeueHaasDisplay', 'bold');
+      
+      // Set as default font
+      doc.setFont('NeueHaasDisplay', 'normal');
+      console.log('Custom font loaded successfully');
+    } catch (error) {
+      console.error('Failed to load custom font:', error);
+      // Fallback to helvetica
+      doc.setFont('helvetica', 'normal');
+    }
+  };
+
+  // Load custom font
+  await loadCustomFont();
+
   // Helper function to load and add logo
   const addLogoToHeader = async (): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -119,56 +153,54 @@ export const generateQuotationPDF = async (
         if (ctx) {
           ctx.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/jpeg'));
-        } else {
-          reject(new Error('Failed to get canvas context'));
-        }
-      };
-      img.onerror = () => reject(new Error('Failed to load logo'));
-      img.src = '/logo_bg_white.jpeg';
-    });
-  };
-
-  // Load logo once at the beginning
-  let logoDataUrl: string;
-  try {
-    logoDataUrl = await addLogoToHeader();
-  } catch (error) {
-    console.error('Failed to load logo:', error);
-    logoDataUrl = ''; // Fallback to no logo
-  }
-
-  // Helper function to add minimal header
-  const addMinimalHeader = (isFirstPage: boolean = false) => {
-    // Top white bar
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageWidth, 25, 'F');
-    
-    // Add logo if available
-    if (logoDataUrl) {
-      try {
-        // Logo centered, 40mm wide, maintaining aspect ratio
-        const logoWidth = 80;
-        const logoHeight = 80 ; // Adjust based on your logo's aspect ratio
-        const logoX = (pageWidth - logoWidth) / 2;
-        const logoY = -20;
-        doc.addImage(logoDataUrl, 'JPEG', logoX, logoY, logoWidth, logoHeight);
-      } catch (error) {
-        console.error('Error adding logo to PDF:', error);
-        // Fallback to text
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(32);
-        doc.setFont('helvetica', 'bold');
-        doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+      } else {
+        reject(new Error('Failed to get canvas context'));
       }
-    } else {
-      // Fallback to text if logo failed to load
+    };
+    img.onerror = () => reject(new Error('Failed to load logo'));
+    img.src = '/logo_bg_white.jpeg';
+  });
+};
+
+// Load logo once at the beginning
+let logoDataUrl: string;
+try {
+  logoDataUrl = await addLogoToHeader();
+} catch (error) {
+  console.error('Failed to load logo:', error);
+  logoDataUrl = ''; // Fallback to no logo
+}
+
+// Helper function to add minimal header
+const addMinimalHeader = (isFirstPage: boolean = false) => {
+  // Top white bar
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, 25, 'F');
+  
+  // Add logo if available
+  if (logoDataUrl) {
+    try {
+      // Logo centered, 40mm wide, maintaining aspect ratio
+      const logoWidth = 80;
+      const logoHeight = 80 ; // Adjust based on your logo's aspect ratio
+      const logoX = (pageWidth - logoWidth) / 2;
+      const logoY = -20;
+      doc.addImage(logoDataUrl, 'JPEG', logoX, logoY, logoWidth, logoHeight);
+    } catch (error) {
+      console.error('Error adding logo to PDF:', error);
+      // Fallback to text
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(32);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
     }
-
-    doc.setDrawColor(0, 0, 0);
+  } else {
+    // Fallback to text if logo failed to load
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(32);
+    doc.setFont('NeueHaasDisplay', 'bold');
+    doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
+  }    doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.15);
     doc.line(margin, 32, pageWidth - margin, 32);
     
@@ -181,61 +213,61 @@ export const generateQuotationPDF = async (
 
   // Customer Details - Clean Layout
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('CUSTOMER DETAILS', margin, yPos);
   yPos += 8;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(9);
   
   // Left column
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Name:', margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(quotation.customerName, margin + 25, yPos);
   
   // Right column
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Date:', pageWidth - margin - 60, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(formatDate(quotation.date), pageWidth - margin - 25, yPos);
   yPos += 6;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Mobile:', margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(quotation.mobileNumber, margin + 25, yPos);
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('ID:', pageWidth - margin - 60, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(quotation.id, pageWidth - margin - 25, yPos);
   yPos += 6;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Project:', margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(quotation.projectName, margin + 25, yPos);
   yPos += 6;
   
   // Add GST Number if available
   if (quotation.customerGstNumber) {
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text('GST No:', margin, yPos);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.text(quotation.customerGstNumber, margin + 25, yPos);
     yPos += 6;
   }
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Address:', margin, yPos);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   const addressText = doc.splitTextToSize(quotation.address, 80);
   doc.text(addressText, margin + 25, yPos);
   yPos += addressText.length * 5 + 10;
   
   // Door Details Table
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(10);
   doc.text('SHUTTER CONFIGURATION', margin, yPos);
   yPos += 8;
@@ -246,7 +278,7 @@ export const generateQuotationPDF = async (
   doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
   
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('SHUTTER NAME', margin + 2, yPos);
   doc.text('TYPE', margin + 55, yPos);
   doc.text('SIZE', margin + 95, yPos);
@@ -257,7 +289,7 @@ export const generateQuotationPDF = async (
   
   // Table rows with minimal styling
   doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(9);
   doc.setDrawColor(220, 220, 220);
   
@@ -285,16 +317,14 @@ export const generateQuotationPDF = async (
   
   yPos += 10;
   
-  // Payment Summary (NO COST BREAKDOWN - CLIENT FACING)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('PAYMENT SUMMARY', margin, yPos);
-  yPos += 8;
-  
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  
-  // Only show final calculation stages
+// Payment Summary (NO COST BREAKDOWN - CLIENT FACING)
+doc.setFont('NeueHaasDisplay', 'bold');
+doc.setFontSize(10);
+doc.text('PAYMENT SUMMARY', margin, yPos);
+yPos += 8;
+
+doc.setFontSize(9);
+doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
   doc.text('Job Total', margin, yPos);
   doc.text(formatCurrencyForPDF(costSummary.taxableAmount + costSummary.discount), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 6;
@@ -336,7 +366,7 @@ export const generateQuotationPDF = async (
   doc.setTextColor(255, 255, 255);
   doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 10, 'F');
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(11);
   doc.text('TOTAL PAYABLE', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
@@ -347,7 +377,7 @@ export const generateQuotationPDF = async (
   if (costSummary.totalSavings > 0) {
     doc.setTextColor(0, 150, 0);
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text(
       `★ You save ${formatCurrencyForPDF(costSummary.totalSavings)} ★`,
       pageWidth / 2,
@@ -358,19 +388,35 @@ export const generateQuotationPDF = async (
     yPos += 8;
   }
   
-  yPos += 5;
-  
-  yPos += 6;
-  
-  yPos += 5;
-  
-  yPos += 4;
-  
-  yPos += 4;
-  
-  yPos += 4;
-  
   yPos += 10;
+  
+  // Payment QR Code Section
+  try {
+    const qrResponse = await fetch('/qr.jpeg');
+    const qrBlob = await qrResponse.blob();
+    const qrDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(qrBlob);
+    });
+    
+    // Add QR code centered
+    const qrSize = 50;
+    const qrX = (pageWidth - qrSize) / 2;
+    doc.addImage(qrDataUrl, 'JPEG', qrX, yPos, qrSize, qrSize);
+    yPos += qrSize + 5;
+    
+    // Payment instruction
+    doc.setFontSize(9);
+    doc.setFont('NeueHaasDisplay', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('Scan to Pay via UPI', pageWidth / 2, yPos, { align: 'center' });
+    yPos += 10;
+  } catch (error) {
+    console.error('Failed to load QR code:', error);
+    yPos += 5;
+  }
   
   // Footer
   doc.setDrawColor(220, 220, 220);
@@ -379,7 +425,7 @@ export const generateQuotationPDF = async (
   
   doc.setTextColor(100, 100, 100);
   doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(
     'This is a system-generated quotation | info@qiro.com',
     pageWidth / 2,
@@ -400,24 +446,24 @@ export const generateQuotationPDF = async (
     // Door Title
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text(door.doorName.toUpperCase(), margin, yPos);
     yPos += 4;
     
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.text(door.doorType.toUpperCase(), margin, yPos);
     yPos += 10;
     
     // Door Specifications
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text('SPECIFICATIONS', margin, yPos);
     yPos += 8;
     
     doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     
     const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
     const handleProfile = masterData.handleProfiles.find(h => h.code === door.handleProfileCode);
@@ -442,9 +488,9 @@ export const generateQuotationPDF = async (
     doc.setLineWidth(0.1);
     
     specs.forEach(([label, value]) => {
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.text(label || '', margin, yPos);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('NeueHaasDisplay', 'normal');
       doc.text(value || '', margin + 55, yPos);
       yPos += 6;
       doc.line(margin, yPos - 4, pageWidth - margin, yPos - 4);
@@ -459,7 +505,7 @@ export const generateQuotationPDF = async (
       yPos = addMinimalHeader();
     }
     
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.text('COST BREAKDOWN', margin, yPos);
@@ -471,7 +517,7 @@ export const generateQuotationPDF = async (
     doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
     
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text('ITEM', margin + 2, yPos);
     doc.text('SPECIFICATION', margin + 45, yPos);
     doc.text('QTY/SIZE', margin + 100, yPos);
@@ -481,7 +527,7 @@ export const generateQuotationPDF = async (
     
     // Cost breakdown rows
     doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(8);
     doc.setDrawColor(220, 220, 220);
     
@@ -594,7 +640,7 @@ export const generateQuotationPDF = async (
     
     // Subtotal for this door
     yPos += 3;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(9);
     doc.text('Cost Per Unit:', margin + 2, yPos);
     doc.text(formatCurrencyForPDF(calc.totalSellingPrice), pageWidth - margin - 5, yPos, { align: 'right' });
@@ -617,7 +663,7 @@ export const generateQuotationPDF = async (
     doc.text(formatCurrencyForPDF(calc.totalOrderValue), pageWidth - margin - 5, yPos, { align: 'right' });
     
     yPos += 15;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     
     // ===== TECHNICAL DRAWING SECTION =====
     if (yPos > pageHeight - 125) {
@@ -625,7 +671,7 @@ export const generateQuotationPDF = async (
       yPos = addMinimalHeader();
     }
     
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
     doc.text('TECHNICAL DRAWING', margin, yPos);
@@ -684,7 +730,7 @@ export const generateQuotationPDF = async (
       
       // Label
       doc.setFontSize(7);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.setTextColor(0, 0, 0);
       doc.text('Technical Elevation View', diagramX + diagramWidth / 2, diagramY + diagramHeight + 4, { align: 'center' });
       
@@ -696,7 +742,7 @@ export const generateQuotationPDF = async (
       // Fallback if diagram generation fails
       console.error('Diagram generation error:', error);
       doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('NeueHaasDisplay', 'normal');
       doc.setTextColor(100, 100, 100);
       doc.text('Technical diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
       doc.setTextColor(0, 0, 0);
@@ -711,7 +757,7 @@ export const generateQuotationPDF = async (
         yPos = addMinimalHeader();
       }
       
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       doc.text('REFERENCE IMAGE', margin, yPos);
@@ -756,7 +802,7 @@ export const generateQuotationPDF = async (
             
             // Label
             doc.setFontSize(7);
-            doc.setFont('helvetica', 'italic');
+            doc.setFont('NeueHaasDisplay', 'italic');
             doc.setTextColor(100, 100, 100);
             doc.text('Uploaded by customer', refImageX + refImageWidth / 2, refImageY + refImageHeight + 4, { align: 'center' });
             doc.setTextColor(0, 0, 0);
@@ -776,7 +822,7 @@ export const generateQuotationPDF = async (
       } catch (error) {
         console.error('Error adding reference image:', error);
         doc.setFontSize(8);
-        doc.setFont('helvetica', 'italic');
+        doc.setFont('NeueHaasDisplay', 'italic');
         doc.setTextColor(100, 100, 100);
         doc.text('Reference image unavailable', pageWidth / 2, yPos, { align: 'center' });
         doc.setTextColor(0, 0, 0);
@@ -800,7 +846,7 @@ export const generateQuotationPDF = async (
       doc.addPage();
       yPos = addMinimalHeader();
       
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
       doc.text('MATERIALS USED', margin, yPos);
@@ -834,12 +880,12 @@ export const generateQuotationPDF = async (
             
             // Add label and name below image
             doc.setFontSize(9);
-            doc.setFont('helvetica', 'bold');
+            doc.setFont('NeueHaasDisplay', 'bold');
             doc.setTextColor(0, 0, 0);
             doc.text(item.label, imageX + imageSize / 2, imageY + imageSize + 6, { align: 'center' });
             
             doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
+            doc.setFont('NeueHaasDisplay', 'normal');
             doc.setTextColor(60, 60, 60);
             doc.text(item.name, imageX + imageSize / 2, imageY + imageSize + 11, { align: 'center' });
             doc.setTextColor(0, 0, 0);
@@ -878,7 +924,7 @@ export const generateQuotationPDF = async (
   
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('COMPLETE COST SUMMARY', margin, yPos);
   yPos += 2;
   
@@ -888,7 +934,7 @@ export const generateQuotationPDF = async (
   
   // Component-wise Breakdown
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('MATERIAL BREAKDOWN', margin, yPos);
   yPos += 8;
   
@@ -897,14 +943,14 @@ export const generateQuotationPDF = async (
   doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 7, 'F');
   
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('COMPONENT', margin + 2, yPos);
   doc.text('AMOUNT', pageWidth - margin - 2, yPos, { align: 'right' });
   
   yPos += 7;
   
   doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   doc.setDrawColor(220, 220, 220);
   
@@ -934,7 +980,7 @@ export const generateQuotationPDF = async (
   
   // Material Subtotal
   yPos += 3;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Material Subtotal:', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.materialSubtotal), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 8;
@@ -946,7 +992,7 @@ export const generateQuotationPDF = async (
     yPos += 8;
     
     doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     
     if (costSummary.totalAdditionalCost > 0) {
       doc.text('Additional Components', margin + 2, yPos);
@@ -969,13 +1015,13 @@ export const generateQuotationPDF = async (
   
   // Making Charges
   yPos += 2;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(10);
   doc.text('FABRICATION CHARGES', margin, yPos);
   yPos += 8;
   
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text('Making Charges', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.makingCharges), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 5;
@@ -984,7 +1030,7 @@ export const generateQuotationPDF = async (
   
   // Subtotal with Making
   yPos += 3;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('Subtotal (with Fabrication):', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.subtotalWithMaking), pageWidth - margin - 5, yPos, { align: 'right' });
   yPos += 10;
@@ -1001,7 +1047,7 @@ export const generateQuotationPDF = async (
     doc.setTextColor(0, 0, 0);
     yPos += 7;
     
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.text('Taxable Amount:', margin + 2, yPos);
     doc.text(formatCurrencyForPDF(costSummary.taxableAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   } else {
@@ -1015,7 +1061,7 @@ export const generateQuotationPDF = async (
   doc.setFillColor(245, 245, 250);
   doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'FD');
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text(`GST (${quotation.gstPercentage}%)`, margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.gstAmount), pageWidth - margin - 5, yPos, { align: 'right' });
   
@@ -1030,7 +1076,7 @@ export const generateQuotationPDF = async (
   doc.setTextColor(255, 255, 255);
   doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 12, 'F');
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(12);
   doc.text('TOTAL PAYABLE', margin + 2, yPos);
   doc.text(formatCurrencyForPDF(costSummary.finalAmount), pageWidth - margin - 5, yPos, { align: 'right' });
@@ -1042,7 +1088,7 @@ export const generateQuotationPDF = async (
   if (costSummary.totalSavings > 0) {
     doc.setTextColor(0, 150, 0);
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.text(
       `★ Total Savings: ${formatCurrencyForPDF(costSummary.totalSavings)} ★`,
       pageWidth / 2,
@@ -1056,7 +1102,7 @@ export const generateQuotationPDF = async (
   // Door-wise Summary Table
   yPos += 5;
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('DOOR-WISE SUMMARY', margin, yPos);
   yPos += 8;
   
@@ -1073,7 +1119,7 @@ export const generateQuotationPDF = async (
   yPos += 7;
   
   doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   
   quotation.doors.forEach((door, index) => {
     const calc = doorCalculations.find(c => c.doorId === door.id);
@@ -1102,7 +1148,7 @@ export const generateQuotationPDF = async (
   
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('TERMS & CONDITIONS', margin, yPos);
   yPos += 2;
   
@@ -1111,90 +1157,90 @@ export const generateQuotationPDF = async (
   yPos += 10;
   
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('1. Measurement Accuracy', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const measurementText = 'All measurements should be verified on-site before fabrication. QIRO is not responsible for errors in measurements provided by the customer.';
   const measurementLines = doc.splitTextToSize(measurementText, pageWidth - 2 * margin);
   doc.text(measurementLines, margin, yPos);
   yPos += measurementLines.length * 4 + 8;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('2. Glass Wastage', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const wastageText = `Glass wastage of ${quotation.glassWastagePercentage}% has been applied to account for cutting and fitting. Actual wastage may vary based on site conditions.`;
   const wastageLines = doc.splitTextToSize(wastageText, pageWidth - 2 * margin);
   doc.text(wastageLines, margin, yPos);
   yPos += wastageLines.length * 4 + 8;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('3. Quotation Validity', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   doc.text('This quotation is valid for 30 days from the date of issue. Prices are subject to change thereafter.', margin, yPos);
   yPos += 10;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('4. Payment Terms', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const paymentText = '50% advance payment required before fabrication. Balance 50% due upon delivery and before installation.';
   doc.text(paymentText, margin, yPos);
   yPos += 10;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('5. Delivery Timeline', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const deliveryText = 'Standard delivery timeline is 7-10 working days from advance payment clearance. Subject to material availability and site readiness. Custom orders may require additional time.';
   const deliveryLines = doc.splitTextToSize(deliveryText, pageWidth - 2 * margin);
   doc.text(deliveryLines, margin, yPos);
   yPos += deliveryLines.length * 4 + 8;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('6. Installation', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   doc.text('Installation charges are separate and will be quoted based on site requirements.', margin, yPos);
   yPos += 10;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('7. Warranty', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const warrantyText = '1-year warranty on manufacturing defects. Warranty does not cover damage from mishandling, improper installation, or natural wear and tear.';
   const warrantyLines = doc.splitTextToSize(warrantyText, pageWidth - 2 * margin);
   doc.text(warrantyLines, margin, yPos);
   yPos += warrantyLines.length * 4 + 8;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('8. Scope of Work', margin, yPos);
   yPos += 5;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   const scopeText = 'This quotation covers supply of materials and fabrication only. Installation, site preparation, structural modifications, and transportation are quoted separately unless explicitly mentioned.';
   const scopeLines = doc.splitTextToSize(scopeText, pageWidth - 2 * margin);
@@ -1207,12 +1253,12 @@ export const generateQuotationPDF = async (
   doc.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 8;
   
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
   doc.text('CONTACT INFORMATION', margin, yPos);
   yPos += 6;
   
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.setFontSize(8);
   doc.text('QIRO Glass Solutions', margin, yPos);
   yPos += 5;
@@ -1243,7 +1289,7 @@ export const generateQuotationPDF = async (
   
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.text('PAYMENT & BANKING DETAILS', margin, yPos);
   yPos += 2;
   
@@ -1259,12 +1305,12 @@ export const generateQuotationPDF = async (
     doc.setFillColor(245, 245, 250);
     doc.rect(margin, yPos - 3, pageWidth - 2 * margin, 60, 'F');
     
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(11);
     doc.text(companyInfo.companyName, margin + 3, yPos);
     yPos += 7;
     
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(8);
     const addressLines = doc.splitTextToSize(companyInfo.address, pageWidth - 2 * margin - 10);
     doc.text(addressLines, margin + 3, yPos);
@@ -1282,10 +1328,10 @@ export const generateQuotationPDF = async (
     // Tax Details
     if (companyInfo.gstNumber || companyInfo.panNumber) {
       yPos += 2;
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.text('Tax Details:', margin + 3, yPos);
       yPos += 5;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('NeueHaasDisplay', 'normal');
       
       if (companyInfo.gstNumber) {
         doc.text(`GST Number: ${companyInfo.gstNumber}`, margin + 3, yPos);
@@ -1303,7 +1349,7 @@ export const generateQuotationPDF = async (
     if (companyInfo.bankDetails) {
       const bankDetails = companyInfo.bankDetails;
       
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.setFontSize(11);
       doc.text('BANKING DETAILS', margin, yPos);
       yPos += 8;
@@ -1312,54 +1358,54 @@ export const generateQuotationPDF = async (
       const bankBoxHeight = 65 + (bankDetails.branchName ? 5 : 0) + (bankDetails.upiId ? 5 : 0);
       doc.rect(margin, yPos - 3, pageWidth - 2 * margin, bankBoxHeight, 'F');
       
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('NeueHaasDisplay', 'normal');
       doc.setFontSize(9);
       
       if (bankDetails.bankName) {
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('Bank Name:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.bankName, margin + 45, yPos);
         yPos += 6;
       }
       
       if (bankDetails.accountName) {
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('Account Name:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.accountName, margin + 45, yPos);
         yPos += 6;
       }
       
       if (bankDetails.accountNumber) {
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('Account Number:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.accountNumber, margin + 45, yPos);
         yPos += 6;
       }
       
       if (bankDetails.ifscCode) {
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('IFSC Code:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.ifscCode, margin + 45, yPos);
         yPos += 6;
       }
       
       if (bankDetails.branchName) {
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('Branch:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.branchName, margin + 45, yPos);
         yPos += 6;
       }
       
       if (bankDetails.upiId) {
         yPos += 2;
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('UPI ID:', margin + 3, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('NeueHaasDisplay', 'normal');
         doc.text(bankDetails.upiId, margin + 45, yPos);
         yPos += 6;
       }
@@ -1369,12 +1415,12 @@ export const generateQuotationPDF = async (
     
     // Payment Instructions
     yPos += 10;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(11);
     doc.text('PAYMENT INSTRUCTIONS', margin, yPos);
     yPos += 8;
     
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(9);
     doc.text('1. Please make payment to the above bank account', margin + 3, yPos);
     yPos += 6;
@@ -1388,12 +1434,12 @@ export const generateQuotationPDF = async (
     // Important Note
     doc.setFillColor(255, 245, 235);
     doc.rect(margin, yPos - 3, pageWidth - 2 * margin, 25, 'F');
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(150, 75, 0);
     doc.text('⚠ IMPORTANT:', margin + 3, yPos);
     yPos += 6;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0);
     doc.text('Please ensure the quotation ID is mentioned in payment remarks for quick processing.', margin + 3, yPos);
@@ -1482,14 +1528,14 @@ export const generateCuttingSchemaPDF = async (
         // Fallback to text
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(32);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('NeueHaasDisplay', 'bold');
         doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
       }
     } else {
       // Fallback to text if logo failed to load
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(32);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('NeueHaasDisplay', 'bold');
       doc.text('QIRO', pageWidth/2, 20, { align: 'center'});
     }
 
@@ -1504,14 +1550,14 @@ export const generateCuttingSchemaPDF = async (
 
   // Title
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NeueHaasDisplay', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('CUTTING SCHEMA - STAFF ONLY', pageWidth / 2, yPos, { align: 'center' });
   yPos += 10;
 
   // Customer and Project Info
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NeueHaasDisplay', 'normal');
   doc.text(`Customer: ${quotation.customerName}`, margin, yPos);
   doc.text(`Date: ${formatDate(quotation.date)}`, pageWidth - margin - 60, yPos);
   yPos += 5;
@@ -1561,25 +1607,25 @@ export const generateCuttingSchemaPDF = async (
     }
 
     // Profile Group Header
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(11);
     doc.text(`Profile Combination ${groupNumber}`, margin, yPos);
     yPos += 6;
 
     // Profile details
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(9);
     doc.text(`Frame Profile: ${group.frameProfile}`, margin, yPos);
     doc.text(`Handle Profile: ${group.handleProfile}`, margin + 70, yPos);
     yPos += 5;
 
     // List all doors using this profile combination
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('NeueHaasDisplay', 'bold');
     doc.setFontSize(8);
     doc.text(`Doors using this profile (Total Qty: ${group.totalQuantity}):`, margin, yPos);
     yPos += 5;
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('NeueHaasDisplay', 'normal');
     doc.setFontSize(8);
     for (const { door, index } of group.doors) {
       doc.text(
@@ -1639,7 +1685,7 @@ export const generateCuttingSchemaPDF = async (
     } catch (error) {
       console.error('Cutting schema diagram error:', error);
       doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
+      doc.setFont('NeueHaasDisplay', 'italic');
       doc.setTextColor(100, 100, 100);
       doc.text('Cutting schema diagram unavailable', pageWidth / 2, yPos, { align: 'center' });
       doc.setTextColor(0, 0, 0);

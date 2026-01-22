@@ -506,6 +506,8 @@ export const masterData: MasterData = {
     makingChargeType: 'percentage', // 'fixed' (₹) or 'percentage' (%)
     makingChargeValue: 15, // 15% of material cost or ₹ amount
     defaultDiscount: 0, // Default discount percentage
+    architectDiscount: 10, // Architect discount percentage
+    dealerDiscount: 15, // Dealer discount percentage
     taxRates: {
       gst: 18, // GST percentage
       cgst: 9, // Central GST (optional)

@@ -205,6 +205,8 @@ export interface OptionalItem {
   total: number;
 }
 
+export type ClientRole = 'customer' | 'architect' | 'dealer';
+
 export interface Client {
   id: string;
   clientName: string;
@@ -213,6 +215,7 @@ export interface Client {
   city?: string;
   address?: string;
   email?: string;
+  role: ClientRole; // customer | architect | dealer
   createdDate: string;
   lastUpdated: string;
 }
@@ -268,6 +271,7 @@ export interface QuotationData {
   city?: string;
   address: string;
   customerGstNumber?: string; // Optional GST number
+  clientRole?: ClientRole; // customer | architect | dealer
   
   // Job Details
   salesperson?: string;
@@ -334,6 +338,8 @@ export interface PricingSettings {
   makingChargeType: MakingChargeType; // 'fixed' (₹) or 'percentage' (%)
   makingChargeValue: number; // Amount in ₹ or percentage value
   defaultDiscount: number; // Default discount percentage
+  architectDiscount: number; // Architect discount percentage
+  dealerDiscount: number; // Dealer discount percentage
   taxRates: {
     gst: number; // GST percentage (e.g., 18)
     cgst?: number; // Central GST (optional, for split GST)

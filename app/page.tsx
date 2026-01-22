@@ -669,6 +669,14 @@ export default function Home() {
   const selectClientForQuotation = (clientId: string) => {
     const client = masterData.clients?.find(c => c.id === clientId);
     if (client) {
+      // Apply appropriate discount based on client role
+      let discount = masterData.pricingSettings.defaultDiscount;
+      if (client.role === 'architect') {
+        discount = masterData.pricingSettings.architectDiscount;
+      } else if (client.role === 'dealer') {
+        discount = masterData.pricingSettings.dealerDiscount;
+      }
+      
       setQuotation(prev => ({
         ...prev,
         clientId: client.id,
@@ -677,6 +685,8 @@ export default function Home() {
         phone: client.phone,
         city: client.city || '',
         address: client.address || '',
+        clientRole: client.role,
+        globalDiscount: discount,
         // Update legacy fields
         customerName: client.clientName,
         mobileNumber: client.phone,
@@ -992,7 +1002,7 @@ export default function Home() {
                               <input
                                 type="number"
                                 step="0.01"
-                                value={profile.pricePerMm || 0}
+                                value={profile.pricePerMm ?? ''}
                                 onChange={e => updateFrameProfile(index, { ...profile, pricePerMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
@@ -1142,7 +1152,7 @@ export default function Home() {
                               <input
                                 type="number"
                                 step="0.01"
-                                value={profile.pricePerMm || 0}
+                                value={profile.pricePerMm ?? ''}
                                 onChange={e => updateHandleProfile(index, { ...profile, pricePerMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
@@ -1230,7 +1240,7 @@ export default function Home() {
                               <input
                                 type="number"
                                 step="0.000001"
-                                value={glass.pricePerSqMm || 0}
+                                value={glass.pricePerSqMm ?? ''}
                                 onChange={e => updateGlassType(index, { ...glass, pricePerSqMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
@@ -1239,7 +1249,7 @@ export default function Home() {
                               <label className="block text-xs font-medium text-gray-700 mb-1">Thickness (mm)</label>
                               <input
                                 type="number"
-                                value={glass.thickness || 0}
+                                value={glass.thickness ?? ''}
                                 onChange={e => updateGlassType(index, { ...glass, thickness: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
@@ -1388,6 +1398,7 @@ export default function Home() {
                             id: uuidv4(),
                             clientName: '',
                             phone: '',
+                            role: 'customer',
                             createdDate: now,
                             lastUpdated: now,
                           });
@@ -1404,7 +1415,16 @@ export default function Home() {
                         <div key={client.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1">
-                              <h4 className="font-semibold text-gray-900">{client.clientName}</h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-gray-900">{client.clientName}</h4>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  client.role === 'architect' ? 'bg-purple-100 text-purple-700' :
+                                  client.role === 'dealer' ? 'bg-green-100 text-green-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {client.role === 'architect' ? 'Architect' : client.role === 'dealer' ? 'Dealer' : 'Customer'}
+                                </span>
+                              </div>
                               {client.firmName && (
                                 <p className="text-sm text-gray-600">{client.firmName}</p>
                               )}
@@ -1511,6 +1531,24 @@ export default function Home() {
                                   placeholder="Enter city"
                                 />
                               </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Client Role *</label>
+                              <select
+                                value={editingClient?.role || 'customer'}
+                                onChange={e => setEditingClient(prev => prev ? { ...prev, role: e.target.value as 'customer' | 'architect' | 'dealer' } : null)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                              >
+                                <option value="customer">Customer (Default Discount)</option>
+                                <option value="architect">Architect (Architect Discount)</option>
+                                <option value="dealer">Dealer (Dealer Discount)</option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {editingClient?.role === 'architect' && `Architect discount: ${masterData.pricingSettings.architectDiscount}%`}
+                                {editingClient?.role === 'dealer' && `Dealer discount: ${masterData.pricingSettings.dealerDiscount}%`}
+                                {editingClient?.role === 'customer' && `Default discount: ${masterData.pricingSettings.defaultDiscount}%`}
+                              </p>
                             </div>
 
                             <div>
@@ -1811,8 +1849,8 @@ export default function Home() {
                             ],
                             costPrice: 1000,
                             sellingPrice: 1500,
-                            pricePerMeter: 750,
-                            pricePerDoor: 1500,
+                            pricePerMm: 0.75,
+                            pricePerUnit: 1500,
                             createdDate: new Date().toISOString(),
                             lastUpdated: new Date().toISOString(),
                           };
@@ -1936,7 +1974,7 @@ export default function Home() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                value={bundle.pricePerMm || 0}
+                                value={bundle.pricePerMm ?? ''}
                                 onChange={e => {
                                   const updated = [...(masterData.slidingBundles || [])];
                                   updated[index] = { ...updated[index], pricePerMm: parseFloat(e.target.value) || undefined, lastUpdated: new Date().toISOString() };
@@ -2476,7 +2514,7 @@ export default function Home() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={masterData.pricingSettings.defaultDiscount}
+                              value={masterData.pricingSettings.defaultDiscount ?? ""}
                               onChange={e => setMasterData(prev => ({
                                 ...prev,
                                 pricingSettings: {
@@ -2487,6 +2525,46 @@ export default function Home() {
                               className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                             />
                             <p className="text-xs text-gray-500 mt-1">Default discount applied to new quotations</p>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded border border-gray-300">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Architect Discount (%)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={masterData.pricingSettings.architectDiscount ?? ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  architectDiscount: parseFloat(e.target.value) || 0
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Special discount percentage for architects</p>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded border border-gray-300">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Dealer Discount (%)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={masterData.pricingSettings.dealerDiscount ?? ''}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                pricingSettings: {
+                                  ...prev.pricingSettings,
+                                  dealerDiscount: parseFloat(e.target.value) || 0
+                                }
+                              }))}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Special discount percentage for dealers</p>
                           </div>
                           
                           <div className="bg-white p-3 rounded border border-gray-300">
@@ -2518,7 +2596,7 @@ export default function Home() {
                                   min="0"
                                   max="100"
                                   step="0.1"
-                                  value={masterData.pricingSettings.taxRates.cgst || 0}
+                                  value={masterData.pricingSettings.taxRates.cgst ?? ''}
                                   onChange={e => setMasterData(prev => ({
                                     ...prev,
                                     pricingSettings: {
@@ -2539,7 +2617,7 @@ export default function Home() {
                                   min="0"
                                   max="100"
                                   step="0.1"
-                                  value={masterData.pricingSettings.taxRates.sgst || 0}
+                                  value={masterData.pricingSettings.taxRates.sgst ?? ''}
                                   onChange={e => setMasterData(prev => ({
                                     ...prev,
                                     pricingSettings: {
@@ -2935,6 +3013,35 @@ export default function Home() {
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                 placeholder="+91-XXXXXXXXXX"
               />
+            </div>
+
+            {/* Client Role */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                Client Role *
+              </label>
+              <select
+                value={quotation.clientRole || 'customer'}
+                onChange={e => {
+                  const newRole = e.target.value as 'customer' | 'architect' | 'dealer';
+                  let discount = masterData.pricingSettings.defaultDiscount;
+                  if (newRole === 'architect') {
+                    discount = masterData.pricingSettings.architectDiscount;
+                  } else if (newRole === 'dealer') {
+                    discount = masterData.pricingSettings.dealerDiscount;
+                  }
+                  setQuotation(prev => ({ 
+                    ...prev, 
+                    clientRole: newRole,
+                    globalDiscount: discount
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+              >
+                <option value="customer">Customer </option>
+                <option value="architect">Architect </option>
+                <option value="dealer">Dealer </option>
+              </select>
             </div>
 
             {/* City */}

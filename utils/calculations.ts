@@ -266,7 +266,7 @@ export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme =
   };
 };
 
-// Calculate glass area in square feet
+// Calculate glass area in square millimeters
 export const calculateGlassArea = (
   door: DoorConfiguration,
   wastagePercentage: number
@@ -282,13 +282,12 @@ export const calculateGlassArea = (
   const glassWidthMm = widthMm - (2 * frameThickness);
   
   const glassAreaMm2 = glassHeightMm * glassWidthMm;
-  const glassArea = sqMmToSqFt(glassAreaMm2);
   
   // Apply wastage percentage
-  const glassAreaWithWastage = glassArea * (1 + wastagePercentage / 100);
+  const glassAreaWithWastage = glassAreaMm2 * (1 + wastagePercentage / 100);
   
   return {
-    glassArea: parseFloat(glassArea.toFixed(2)),
+    glassArea: parseFloat(glassAreaMm2.toFixed(2)),
     glassAreaWithWastage: parseFloat(glassAreaWithWastage.toFixed(2)),
   };
 };
@@ -308,20 +307,19 @@ export const calculateDoorCosts = (
   
   // AUTO-CALCULATE: Total profile length
   const totalProfileLengthMm = calculateProfileLength(widthMm, heightMm, door.doorType, frameThickness);
-  const totalProfileLength = totalProfileLengthMm / 1000; // Convert to meters
   
-  // Calculate frame cost
-  const framePricePerMeter = frameProfile?.pricePerMeter || 0;
-  const frameCost = totalProfileLength * framePricePerMeter * door.quantity;
+  // Calculate frame cost (pricePerMm * length in mm)
+  const framePricePerMm = frameProfile?.pricePerMm || 0;
+  const frameCost = totalProfileLengthMm * framePricePerMm * door.quantity;
   
   // AUTO-CALCULATE: Handle length and cost
-  let totalHandleLength: number | undefined;
+  let totalHandleLengthMm: number | undefined;
   let handleCost = 0;
   if (door.hasHandle && door.handleProfileCode) {
-    totalHandleLength = (heightMm - 100) / 1000; // Handle runs vertically, 100mm less for clearance, in meters
+    totalHandleLengthMm = heightMm - 100; // Handle runs vertically, 100mm less for clearance
     const handleProfile = masterData.handleProfiles.find(h => h.code === door.handleProfileCode);
-    const handlePricePerMeter = handleProfile?.pricePerMeter || 0;
-    handleCost = totalHandleLength * handlePricePerMeter * door.quantity;
+    const handlePricePerMm = handleProfile?.pricePerMm || 0;
+    handleCost = totalHandleLengthMm * handlePricePerMm * door.quantity;
   }
   
   // AUTO-CALCULATE: Glass area and cost
@@ -330,7 +328,7 @@ export const calculateDoorCosts = (
     wastagePercentage
   );
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
-  const glassCost = glassAreaWithWastage * (glassType?.pricePerSqFt || 0) * door.quantity;
+  const glassCost = glassAreaWithWastage * (glassType?.pricePerSqMm || 0) * door.quantity;
   
   // AUTO-CALCULATE: Connectors required
   const connectorsRequired = door.connectorQuantity || calculateConnectorsRequired(
@@ -361,11 +359,12 @@ export const calculateDoorCosts = (
   let dividerCost = 0;
   
   if (door.hasDividers && door.dividerConfig) {
-    dividerLength = calculateDividerLength(widthMm, heightMm, door.dividerConfig) / 1000; // meters
+    const dividerLengthMm = calculateDividerLength(widthMm, heightMm, door.dividerConfig);
+    dividerLength = dividerLengthMm / 1000; // meters for display
     
     const dividerProfile = masterData.products?.find(p => p.code === door.dividerProfileCode && p.productType === 'divider-profile');
-    const dividerPricePerMeter = dividerProfile?.pricePerMeter || dividerProfile?.sellingPrice || 0;
-    dividerCost = dividerLength * dividerPricePerMeter * door.quantity;
+    const dividerPricePerMm = dividerProfile?.pricePerMm || dividerProfile?.sellingPrice || 0;
+    dividerCost = dividerLengthMm * dividerPricePerMm * door.quantity;
     
     // Divider connectors
     const horizontalCount = door.dividerConfig.horizontal?.length || 0;
@@ -381,9 +380,9 @@ export const calculateDoorCosts = (
   let gasketCost = 0;
   if (door.gasketCode) {
     const gasketProduct = masterData.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
-    const gasketPricePerMeter = gasketProduct?.pricePerMeter || gasketProduct?.sellingPrice || 0;
-    const gasketLength = totalProfileLength; // Gasket runs along entire perimeter
-    gasketCost = gasketLength * gasketPricePerMeter * door.quantity;
+    const gasketPricePerMm = gasketProduct?.pricePerMm || gasketProduct?.sellingPrice || 0;
+    const gasketLengthMm = totalProfileLengthMm; // Gasket runs along entire perimeter
+    gasketCost = gasketLengthMm * gasketPricePerMm * door.quantity;
   }
   
   // AUTO-CALCULATE: Lock cost
@@ -401,10 +400,10 @@ export const calculateDoorCosts = (
     const slidingBundle = masterData.slidingBundles?.find(b => b.code === door.slidingSystemCode);
     if (slidingBundle) {
       // For bundles, use pricePerDoor if available, otherwise use sellingPrice as fixed price per door
-      if (slidingBundle.pricePerDoor) {
-        slidingSystemCost = slidingBundle.pricePerDoor * door.quantity;
-      } else if (slidingBundle.pricePerMeter) {
-        slidingSystemCost = (widthMm / 1000) * slidingBundle.pricePerMeter * door.quantity;
+      if (slidingBundle.pricePerUnit) {
+        slidingSystemCost = slidingBundle.pricePerUnit * door.quantity;
+      } else if (slidingBundle.pricePerMm) {
+        slidingSystemCost = widthMm * slidingBundle.pricePerMm * door.quantity;
       } else {
         // Use sellingPrice as fixed price per door
         slidingSystemCost = slidingBundle.sellingPrice * door.quantity;
@@ -412,8 +411,8 @@ export const calculateDoorCosts = (
     } else {
       // Fallback to old products for backward compatibility
       const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
-      const slidingPricePerMeter = slidingSystem?.pricePerMeter || slidingSystem?.sellingPrice || 0;
-      slidingSystemCost = (widthMm / 1000) * slidingPricePerMeter * door.quantity;
+      const slidingPricePerMm = slidingSystem?.pricePerMm || slidingSystem?.sellingPrice || 0;
+      slidingSystemCost = widthMm * slidingPricePerMm * door.quantity;
     }
   }
   
@@ -439,11 +438,11 @@ export const calculateDoorCosts = (
     doorId: door.id,
     
     // Profile/Frame
-    totalProfileLength: parseFloat(totalProfileLength.toFixed(3)),
+    totalProfileLength: parseFloat((totalProfileLengthMm / 1000).toFixed(3)),
     frameCost: parseFloat(frameCost.toFixed(2)),
     
     // Handle
-    totalHandleLength,
+    totalHandleLength: totalHandleLengthMm ? parseFloat((totalHandleLengthMm / 1000).toFixed(3)) : undefined,
     handleCost: parseFloat(handleCost.toFixed(2)),
     
     // Glass

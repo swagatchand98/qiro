@@ -27,11 +27,11 @@ export interface Product {
   // Product-specific fields
   width?: number; // For profiles (mm)
   height?: number; // For profiles (mm)
-  pricePerMeter?: number; // For profiles
+  pricePerMm?: number; // For profiles
   connectorPrice?: number; // For items that need connectors
   handlePrice?: number; // For items that come with handles
   pricePerUnit?: number; // For units like connectors, locks
-  pricePerSqFt?: number; // For glass
+  pricePerSqMm?: number; // For glass (price per square mm)
   thickness?: number; // For glass, gaskets (mm)
 }
 
@@ -41,7 +41,7 @@ export interface FrameProfile {
   name: string;
   width: number; // mm
   height: number; // mm
-  pricePerMeter: number;
+  pricePerMm: number;
   imageUrl?: string;
   suggestedHandles?: string[]; // Handle profile codes
   suggestedGlassTypes?: string[]; // Glass type codes
@@ -51,14 +51,14 @@ export interface FrameProfile {
 export interface HandleProfile {
   code: string;
   name: string;
-  pricePerMeter: number;
+  pricePerMm: number;
   imageUrl?: string;
 }
 
 export interface GlassType {
   code: string;
   name: string;
-  pricePerSqFt: number;
+  pricePerSqMm: number;
   thickness?: number; // mm
   imageUrl?: string;
 }
@@ -246,8 +246,8 @@ export interface SlidingBundle {
   components: SlidingBundleComponent[]; // Track, rollers, guides, etc.
   costPrice: number; // Hidden from staff
   sellingPrice: number; // Dealer price
-  pricePerMeter?: number; // For track-based pricing
-  pricePerDoor?: number; // For door-based pricing
+  pricePerMm?: number; // For track-based pricing (price per mm)
+  pricePerUnit?: number; // For unit-based pricing (price per door)
   imageUrl?: string;
   notes?: string;
   createdDate: string;

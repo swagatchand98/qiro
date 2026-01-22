@@ -531,7 +531,7 @@ export default function Home() {
       name: 'New Frame Profile',
       width: 20,
       height: 40,
-      pricePerMeter: 100,
+      pricePerMm: 0.10,
     };
     setMasterData(prev => ({
       ...prev,
@@ -559,7 +559,7 @@ export default function Home() {
     const newProfile: HandleProfile = {
       code: `HP${String(masterData.handleProfiles.length + 1).padStart(3, '0')}`,
       name: 'New Handle Profile',
-      pricePerMeter: 80,
+      pricePerMm: 0.08,
     };
     setMasterData(prev => ({
       ...prev,
@@ -587,7 +587,7 @@ export default function Home() {
     const newGlass: GlassType = {
       code: `GL${String(masterData.glassTypes.length + 1).padStart(3, '0')}`,
       name: 'New Glass Type',
-      pricePerSqFt: 50,
+      pricePerSqMm: 0.000538,
       thickness: 5,
     };
     setMasterData(prev => ({
@@ -988,11 +988,12 @@ export default function Home() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Meter (₹)</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per mm (₹)</label>
                               <input
                                 type="number"
-                                value={profile.pricePerMeter}
-                                onChange={e => updateFrameProfile(index, { ...profile, pricePerMeter: parseFloat(e.target.value) || 0 })}
+                                step="0.01"
+                                value={profile.pricePerMm || 0}
+                                onChange={e => updateFrameProfile(index, { ...profile, pricePerMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
@@ -1137,11 +1138,12 @@ export default function Home() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Meter (₹)</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per mm (₹)</label>
                               <input
                                 type="number"
-                                value={profile.pricePerMeter}
-                                onChange={e => updateHandleProfile(index, { ...profile, pricePerMeter: parseFloat(e.target.value) || 0 })}
+                                step="0.01"
+                                value={profile.pricePerMm || 0}
+                                onChange={e => updateHandleProfile(index, { ...profile, pricePerMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
@@ -1224,11 +1226,12 @@ export default function Home() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Sq.Ft (₹)</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Sq.mm (₹)</label>
                               <input
                                 type="number"
-                                value={glass.pricePerSqFt}
-                                onChange={e => updateGlassType(index, { ...glass, pricePerSqFt: parseFloat(e.target.value) || 0 })}
+                                step="0.000001"
+                                value={glass.pricePerSqMm || 0}
+                                onChange={e => updateGlassType(index, { ...glass, pricePerSqMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
@@ -1928,14 +1931,15 @@ export default function Home() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Price Per Meter (track)</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price Per mm (track)</label>
                               <input
                                 type="number"
+                                step="0.01"
                                 min="0"
-                                value={bundle.pricePerMeter || 0}
+                                value={bundle.pricePerMm || 0}
                                 onChange={e => {
                                   const updated = [...(masterData.slidingBundles || [])];
-                                  updated[index] = { ...updated[index], pricePerMeter: parseFloat(e.target.value) || undefined, lastUpdated: new Date().toISOString() };
+                                  updated[index] = { ...updated[index], pricePerMm: parseFloat(e.target.value) || undefined, lastUpdated: new Date().toISOString() };
                                   setMasterData(prev => ({ ...prev, slidingBundles: updated }));
                                 }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
@@ -3234,7 +3238,7 @@ export default function Home() {
                   >
                     {masterData.frameProfiles.map(profile => (
                       <option key={profile.code} value={profile.code}>
-                        {profile.code} - {profile.name} ({profile.width}x{profile.height}mm) - ₹{profile.pricePerMeter}/m
+                        {profile.code} - {profile.name} ({profile.width}x{profile.height}mm) - ₹{profile.pricePerMm}/mm
                       </option>
                     ))}
                   </select>
@@ -3254,7 +3258,7 @@ export default function Home() {
                     <option value="">None (No Glass)</option>
                     {filteredOptions.glassTypes.map(glass => (
                       <option key={glass.code} value={glass.code}>
-                        {glass.name} - {formatCurrency(glass.pricePerSqFt)}/sqft
+                        {glass.name} - ₹{glass.pricePerSqMm}/sq.mm
                       </option>
                     ))}
                   </select>
@@ -3283,7 +3287,7 @@ export default function Home() {
                     <option value="">None</option>
                     {filteredOptions.handles.map(handle => (
                       <option key={handle.code} value={handle.code}>
-                        {handle.name} - {formatCurrency(handle.pricePerMeter)}/m
+                        {handle.name} - ₹{handle.pricePerMm}/mm
                       </option>
                     ))}
                   </select>

@@ -512,6 +512,20 @@ export const masterData: MasterData = {
       sgst: 9, // State GST (optional)
     },
   },
+  validationLimits: {
+    minWidth: 100, // Minimum width in mm
+    maxWidth: 10000, // Maximum width in mm (10 meters)
+    minHeight: 100, // Minimum height in mm
+    maxHeight: 10000, // Maximum height in mm (10 meters)
+  },
+  hingeCalculationSettings: {
+    rules: [
+      { minHeight: 0, maxHeight: 1000, hingeQuantity: 2 },
+      { minHeight: 1000, maxHeight: 2000, hingeQuantity: 3 },
+      { minHeight: 2000, maxHeight: 3000, hingeQuantity: 4 },
+      { minHeight: 3000, maxHeight: Infinity, hingeQuantity: 5 },
+    ]
+  },
   defaultGST: 18,
   defaultGlassWastage: 10,
   companyInfo: {

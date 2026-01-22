@@ -341,6 +341,23 @@ export interface PricingSettings {
   };
 }
 
+export interface ValidationLimits {
+  minWidth: number; // mm
+  maxWidth: number; // mm
+  minHeight: number; // mm
+  maxHeight: number; // mm
+}
+
+export interface HingeRule {
+  minHeight: number; // mm
+  maxHeight: number; // mm (Infinity for unlimited)
+  hingeQuantity: number;
+}
+
+export interface HingeCalculationSettings {
+  rules: HingeRule[]; // Sorted by minHeight
+}
+
 export interface MasterData {
   frameProfiles: FrameProfile[];
   handleProfiles: HandleProfile[];
@@ -352,6 +369,8 @@ export interface MasterData {
   slidingBundles: SlidingBundle[]; // Sliding system bundles
   dividerSettings: DividerSettings; // Divider configuration
   pricingSettings: PricingSettings; // Pricing & charges configuration
+  validationLimits: ValidationLimits; // Door dimension validation limits
+  hingeCalculationSettings: HingeCalculationSettings; // Automatic hinge quantity calculation
   defaultGST: number;
   defaultGlassWastage: number;
   companyInfo?: CompanyInfo; // Company details for invoices

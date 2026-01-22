@@ -71,13 +71,17 @@ function calculateHingePositions(heightMm: number, hingeQuantity: number): numbe
 export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'company-info' | 'defaults'>('frames');
+  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'company-info' | 'defaults' | 'validation' | 'hinges'>('frames');
   const [showReport, setShowReport] = useState(false);
   
   // Password protection state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  
+  // Dimension validation error states
+  const [widthError, setWidthError] = useState('');
+  const [heightError, setHeightError] = useState('');
   
   const SETTINGS_PASSWORD = 'admin123'; // Hardcoded password
   
@@ -290,6 +294,21 @@ export default function Home() {
     liftAvailable: true,
   });
 
+  // Helper function to calculate hinge quantity based on height
+  const calculateHingeQuantityByHeight = (heightMm: number): number => {
+    const rules = masterData.hingeCalculationSettings?.rules || [];
+    
+    // Find the matching rule
+    for (const rule of rules) {
+      if (heightMm >= rule.minHeight && heightMm < rule.maxHeight) {
+        return rule.hingeQuantity;
+      }
+    }
+    
+    // Default fallback
+    return 2;
+  };
+
   // Helper function to ensure door has hinge positions calculated
   const ensureHingePositions = (door: DoorConfiguration): DoorConfiguration => {
     // Always recalculate to ensure fresh positions
@@ -358,27 +377,52 @@ export default function Home() {
     }
   }, [quotation]);
 
-  // Auto-calculate hinge positions when height or hinge quantity changes
+  // Auto-calculate hinge quantity and positions when height changes
   useEffect(() => {
     const heightMm = convertToMm(currentDoor.height, currentDoor.measurementUnit);
-    const hingeQty = currentDoor.hingeQuantity || 2;
     
-    if (heightMm > 0) {
-      const positions = calculateHingePositions(heightMm, hingeQty);
-      if (JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm)) {
+    if (heightMm > 0 && (currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge')) {
+      // Auto-calculate hinge quantity based on height
+      const calculatedHingeQty = calculateHingeQuantityByHeight(heightMm);
+      
+      // Calculate positions
+      const positions = calculateHingePositions(heightMm, calculatedHingeQty);
+      
+      if (currentDoor.hingeQuantity !== calculatedHingeQty || JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm)) {
         setCurrentDoor(prev => ({
           ...prev,
+          hingeQuantity: calculatedHingeQty,
           hingePositionMm: positions
         }));
       }
     }
-  }, [currentDoor.height, currentDoor.hingeQuantity, currentDoor.measurementUnit]);
+  }, [currentDoor.height, currentDoor.measurementUnit, currentDoor.doorType, masterData.hingeCalculationSettings]);
 
   const handleAddDoor = () => {
     if (!currentDoor.doorName || !currentDoor.height || !currentDoor.width) {
       alert('Please fill in all required door fields');
       return;
     }
+
+    // Validate dimensions against limits
+    const minWidth = masterData.validationLimits?.minWidth || 100;
+    const maxWidth = masterData.validationLimits?.maxWidth || 10000;
+    const minHeight = masterData.validationLimits?.minHeight || 100;
+    const maxHeight = masterData.validationLimits?.maxHeight || 10000;
+
+    if (currentDoor.width < minWidth || currentDoor.width > maxWidth) {
+      setWidthError(`Width must be between ${minWidth}mm and ${maxWidth}mm`);
+      return;
+    }
+
+    if (currentDoor.height < minHeight || currentDoor.height > maxHeight) {
+      setHeightError(`Height must be between ${minHeight}mm and ${maxHeight}mm`);
+      return;
+    }
+
+    // Clear any errors
+    setWidthError('');
+    setHeightError('');
 
     setQuotation(prev => ({
       ...prev,
@@ -776,17 +820,17 @@ export default function Home() {
           />
           
           {/* Sidebar Panel */}
-          <div className="fixed right-0 top-0 h-full w-full md:w-2/3 lg:w-1/2 bg-white border-l border-gray-200 z-50 overflow-y-auto">
-            <div className="p-6">
+          <div className="fixed right-0 top-0 h-full w-full sm:w-5/6 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-white border-l border-gray-200 z-50 overflow-y-auto">
+            <div className="p-4 sm:p-6">
               {/* Header with Save Button and Sync Status */}
-              <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-4 border-b-2 border-gray-200 gap-3">
                 <div>
-                  <h2 className="text-2xl font-bold text-black">Settings & Master Data</h2>
-                  <p className="text-sm text-gray-500 mt-1">Manage your system configuration</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-black">Settings & Master Data</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">Manage your system configuration</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   {/* Sync Status Indicator */}
-                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 rounded-lg border border-gray-200 text-xs sm:text-sm">
                     {syncStatus === 'syncing' && (
                       <>
                         <svg className="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
@@ -828,7 +872,7 @@ export default function Home() {
                   <button
                     onClick={handleSaveToFirestore}
                     disabled={syncStatus === 'syncing' || !isFirebaseConfigured}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-semibold transition-all shadow-md hover:shadow-lg"
+                    className="flex items-center gap-1 sm:gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg text-sm sm:text-base font-semibold transition-all shadow-md hover:shadow-lg"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -863,12 +907,12 @@ export default function Home() {
               )}
 
               {/* Tabs */}
-              <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200">
-                {(['frames', 'handles', 'glass', 'connectors', 'clients', 'jobs', 'sliding-bundles', 'company-info', 'defaults'] as const).map(tab => (
+              <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200 -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-thin scrollbar-thumb-gray-300">
+                {(['frames', 'handles', 'glass', 'connectors', 'clients', 'jobs', 'sliding-bundles', 'company-info', 'defaults', 'validation', 'hinges'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-2 font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    className={`px-3 sm:px-4 py-2 text-sm sm:text-base font-medium whitespace-nowrap border-b-2 transition-colors ${
                       activeTab === tab
                         ? 'border-black text-black'
                         : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -883,6 +927,8 @@ export default function Home() {
                     {tab === 'sliding-bundles' && 'Sliding Bundles'}
                     {tab === 'company-info' && 'Company Info'}
                     {tab === 'defaults' && 'Defaults'}
+                    {tab === 'validation' && 'Validation'}
+                    {tab === 'hinges' && 'Hinge Rules'}
                   </button>
                 ))}
               </div>
@@ -2522,6 +2568,258 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                {/* Validation Tab */}
+                {activeTab === 'validation' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Door Dimension Validation Limits</h3>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Set minimum and maximum allowed dimensions for door width and height. These limits will be enforced when adding doors.
+                    </p>
+                    
+                    <div className="space-y-6">
+                      {/* Width Limits */}
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-semibold text-gray-700 mb-4">Width Limits (mm)</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Minimum Width (mm)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={masterData.validationLimits?.minWidth || 100}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                validationLimits: {
+                                  ...prev.validationLimits,
+                                  minWidth: parseInt(e.target.value) || 100,
+                                  maxWidth: prev.validationLimits?.maxWidth || 10000,
+                                  minHeight: prev.validationLimits?.minHeight || 100,
+                                  maxHeight: prev.validationLimits?.maxHeight || 10000,
+                                }
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Maximum Width (mm)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={masterData.validationLimits?.maxWidth || 10000}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                validationLimits: {
+                                  ...prev.validationLimits,
+                                  minWidth: prev.validationLimits?.minWidth || 100,
+                                  maxWidth: parseInt(e.target.value) || 10000,
+                                  minHeight: prev.validationLimits?.minHeight || 100,
+                                  maxHeight: prev.validationLimits?.maxHeight || 10000,
+                                }
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Height Limits */}
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="font-semibold text-gray-700 mb-4">Height Limits (mm)</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Minimum Height (mm)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={masterData.validationLimits?.minHeight || 100}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                validationLimits: {
+                                  ...prev.validationLimits,
+                                  minWidth: prev.validationLimits?.minWidth || 100,
+                                  maxWidth: prev.validationLimits?.maxWidth || 10000,
+                                  minHeight: parseInt(e.target.value) || 100,
+                                  maxHeight: prev.validationLimits?.maxHeight || 10000,
+                                }
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Maximum Height (mm)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={masterData.validationLimits?.maxHeight || 10000}
+                              onChange={e => setMasterData(prev => ({
+                                ...prev,
+                                validationLimits: {
+                                  ...prev.validationLimits,
+                                  minWidth: prev.validationLimits?.minWidth || 100,
+                                  maxWidth: prev.validationLimits?.maxWidth || 10000,
+                                  minHeight: prev.validationLimits?.minHeight || 100,
+                                  maxHeight: parseInt(e.target.value) || 10000,
+                                }
+                              }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary */}
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-semibold text-gray-700 mb-2">Current Validation Rules</h4>
+                        <ul className="text-sm text-gray-700 space-y-1">
+                          <li>• Width must be between {masterData.validationLimits?.minWidth || 100}mm and {masterData.validationLimits?.maxWidth || 10000}mm</li>
+                          <li>• Height must be between {masterData.validationLimits?.minHeight || 100}mm and {masterData.validationLimits?.maxHeight || 10000}mm</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hinge Rules Tab */}
+                {activeTab === 'hinges' && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Automatic Hinge Quantity Calculator</h3>
+                    <p className="text-sm text-gray-600 mb-6">
+                      Define rules to automatically calculate hinge quantity based on door height. The system will automatically select the appropriate number of hinges when you enter the door height.
+                    </p>
+                    
+                    <div className="space-y-4">
+                      {(masterData.hingeCalculationSettings?.rules || []).map((rule, index) => (
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold text-gray-700">Rule {index + 1}</h4>
+                            <button
+                              onClick={() => {
+                                if (confirm('Delete this rule?')) {
+                                  setMasterData(prev => ({
+                                    ...prev,
+                                    hingeCalculationSettings: {
+                                      ...prev.hingeCalculationSettings,
+                                      rules: prev.hingeCalculationSettings?.rules.filter((_, i) => i !== index) || []
+                                    }
+                                  }));
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Min Height (mm)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={rule.minHeight}
+                                onChange={e => {
+                                  const newRules = [...(masterData.hingeCalculationSettings?.rules || [])];
+                                  newRules[index] = { ...rule, minHeight: parseInt(e.target.value) || 0 };
+                                  setMasterData(prev => ({
+                                    ...prev,
+                                    hingeCalculationSettings: { rules: newRules }
+                                  }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Max Height (mm)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={rule.maxHeight === Infinity ? '' : rule.maxHeight}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const newRules = [...(masterData.hingeCalculationSettings?.rules || [])];
+                                  newRules[index] = { ...rule, maxHeight: val === '' ? Infinity : parseInt(val) || 0 };
+                                  setMasterData(prev => ({
+                                    ...prev,
+                                    hingeCalculationSettings: { rules: newRules }
+                                  }));
+                                }}
+                                placeholder="Unlimited"
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Hinge Quantity
+                              </label>
+                              <input
+                                type="number"
+                                min="2"
+                                value={rule.hingeQuantity}
+                                onChange={e => {
+                                  const newRules = [...(masterData.hingeCalculationSettings?.rules || [])];
+                                  newRules[index] = { ...rule, hingeQuantity: parseInt(e.target.value) || 2 };
+                                  setMasterData(prev => ({
+                                    ...prev,
+                                    hingeCalculationSettings: { rules: newRules }
+                                  }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-2">
+                            {rule.minHeight}mm - {rule.maxHeight === Infinity ? 'Unlimited' : `${rule.maxHeight}mm`} → {rule.hingeQuantity} hinges
+                          </p>
+                        </div>
+                      ))}
+                      
+                      <button
+                        onClick={() => {
+                          const currentRules = masterData.hingeCalculationSettings?.rules || [];
+                          const lastRule = currentRules[currentRules.length - 1];
+                          const newMinHeight = lastRule ? (lastRule.maxHeight === Infinity ? 0 : lastRule.maxHeight) : 0;
+                          
+                          setMasterData(prev => ({
+                            ...prev,
+                            hingeCalculationSettings: {
+                              rules: [
+                                ...currentRules,
+                                { minHeight: newMinHeight, maxHeight: newMinHeight + 1000, hingeQuantity: 2 }
+                              ]
+                            }
+                          }));
+                        }}
+                        className="w-full bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-semibold"
+                      >
+                        + Add New Rule
+                      </button>
+
+                      {/* Summary */}
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <h4 className="font-semibold text-gray-700 mb-2">Current Hinge Rules Summary</h4>
+                        <ul className="text-sm text-gray-700 space-y-1">
+                          {(masterData.hingeCalculationSettings?.rules || []).map((rule, index) => (
+                            <li key={index}>
+                              • {rule.minHeight}mm - {rule.maxHeight === Infinity ? 'Unlimited' : `${rule.maxHeight}mm`}: <strong>{rule.hingeQuantity} hinges</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2530,9 +2828,9 @@ export default function Home() {
 
       {/* Header */}
       <header className="bg-black border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <img src="/logo_bg_black.jpeg" alt="QIRO" className="h-12 w-auto" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <img src="/logo_bg_black.jpeg" alt="QIRO" className="h-10 sm:h-12 w-auto" />
             <div>
               <h1 className="text-xl font-bold text-white">QIRO Glass Solutions</h1>
               <p className="text-xs text-gray-400">Quotation & Estimation System</p>
@@ -2541,9 +2839,9 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-4 sm:space-y-6">
         {/* Quotation Setup Section */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">1</span>
             Client & Job Details
@@ -2579,7 +2877,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {/* Client Name */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
@@ -2747,7 +3045,7 @@ export default function Home() {
         </section>
 
         {/* Door Configuration Module */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">2</span>
             Add Door/Shutter Configuration
@@ -2808,13 +3106,35 @@ export default function Home() {
                   </label>
                   <input
                     type="number"
-                    min="0"
+                    min={masterData.validationLimits?.minWidth || 100}
+                    max={masterData.validationLimits?.maxWidth || 10000}
                     step="1"
                     value={currentDoor.width || ''}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, width: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                    onChange={e => {
+                      const value = parseFloat(e.target.value) || 0;
+                      const minWidth = masterData.validationLimits?.minWidth || 100;
+                      const maxWidth = masterData.validationLimits?.maxWidth || 10000;
+                      
+                      setCurrentDoor(prev => ({ ...prev, width: value }));
+                      
+                      if (value > 0 && (value < minWidth || value > maxWidth)) {
+                        setWidthError(`Width must be between ${minWidth}mm and ${maxWidth}mm`);
+                      } else {
+                        setWidthError('');
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 ${
+                      widthError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'
+                    }`}
                     placeholder="400"
                   />
+                  {widthError ? (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{widthError}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {masterData.validationLimits?.minWidth || 100}mm - {masterData.validationLimits?.maxWidth || 10000}mm
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2822,13 +3142,35 @@ export default function Home() {
                   </label>
                   <input
                     type="number"
-                    min="0"
+                    min={masterData.validationLimits?.minHeight || 100}
+                    max={masterData.validationLimits?.maxHeight || 10000}
                     step="1"
                     value={currentDoor.height || ''}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, height: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                    onChange={e => {
+                      const value = parseFloat(e.target.value) || 0;
+                      const minHeight = masterData.validationLimits?.minHeight || 100;
+                      const maxHeight = masterData.validationLimits?.maxHeight || 10000;
+                      
+                      setCurrentDoor(prev => ({ ...prev, height: value }));
+                      
+                      if (value > 0 && (value < minHeight || value > maxHeight)) {
+                        setHeightError(`Height must be between ${minHeight}mm and ${maxHeight}mm`);
+                      } else {
+                        setHeightError('');
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 ${
+                      heightError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'
+                    }`}
                     placeholder="800"
                   />
+                  {heightError ? (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{heightError}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {masterData.validationLimits?.minHeight || 100}mm - {masterData.validationLimits?.maxHeight || 10000}mm
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -3294,9 +3636,9 @@ export default function Home() {
             {/* Add Door Button */}
             <button
               onClick={handleAddDoor}
-              className="w-full bg-black hover:bg-gray-800 text-white font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center text-lg shadow-lg"
+              className="w-full bg-black hover:bg-gray-800 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-lg transition-colors flex items-center justify-center text-base sm:text-lg shadow-lg"
             >
-              <span className="mr-2 text-xl">+</span> Add Door to Quotation
+              <span className="mr-2 text-lg sm:text-xl">+</span> Add Door to Quotation
             </button>
 
               {/* Comprehensive Auto-Calculated Preview */}
@@ -3552,8 +3894,8 @@ export default function Home() {
           {/* Added Doors List */}
           {quotation.doors.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Added Doors ({quotation.doors.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">Added Doors ({quotation.doors.length})</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {quotation.doors.map((door, index) => {
                   const calc = doorCalculations[index];
                   return (
@@ -3593,13 +3935,13 @@ export default function Home() {
         </section>
 
         {/* Connectors & Lift Configuration */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">3</span>
             Connectors & Lift Configuration
           </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Connectors * {filteredOptions.connectors.length < masterData.connectorTypes.length && (
@@ -3634,7 +3976,7 @@ export default function Home() {
         </section>
 
         {/* Additional Components Section */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">4</span>
             Additional Components
@@ -3732,7 +4074,7 @@ export default function Home() {
         </section>
 
         {/* Optional Items Section */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">5</span>
             Optional Items
@@ -3830,12 +4172,12 @@ export default function Home() {
         </section>
 
         {/* Configuration Settings */}
-        <section className="border border-gray-200 rounded-lg p-6 bg-white">
+        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
             <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
             Configuration
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
                 GST %
@@ -3869,7 +4211,7 @@ export default function Home() {
 
         {/* Cutting Schemes Display */}
         {showReport && quotation.doors.length > 0 && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
               <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">7</span>
               Cutting Schemes
@@ -3999,7 +4341,7 @@ export default function Home() {
 
         {/* Cost Summary */}
         {showReport && quotation.doors.length > 0 && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
               <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">8</span>
               Cost Summary
@@ -4140,15 +4482,15 @@ export default function Home() {
 
         {/* Export Buttons */}
         {showReport && quotation.doors.length > 0 && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
               <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">9</span>
               Export Options
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <button
                 onClick={handleExportPDF}
-                className="bg-black hover:bg-gray-800 text-white font-semibold py-4 px-6 rounded transition-colors flex items-center justify-center"
+                className="bg-black hover:bg-gray-800 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded transition-colors flex items-center justify-center text-sm sm:text-base"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -4187,7 +4529,7 @@ export default function Home() {
         )}
         {/* Generate Report Button */}
         {quotation.doors.length > 0 && !showReport && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <div className="flex flex-col items-center justify-center space-y-4">
               <h2 className="text-lg font-bold text-black">Ready to Generate Report?</h2>
               <p className="text-sm text-gray-600 text-center">Click the button below to generate cutting schemes, cost summary, and export options</p>
@@ -4206,7 +4548,7 @@ export default function Home() {
 
         {/* Regenerate Report Button - Shows when report is visible */}
         {showReport && quotation.doors.length > 0 && (
-          <section className="border border-gray-200 rounded-lg p-6 bg-white">
+          <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <div className="flex flex-col items-center justify-center space-y-4">
               <p className="text-sm text-gray-600 text-center">Made changes? Click below to hide and regenerate the report</p>
               <button

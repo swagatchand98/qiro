@@ -170,8 +170,10 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
         ? offsetX + scaledWidth - scaledFrameThickness / 2
         : offsetX + scaledWidth / 2;
       
-      const handleY = offsetY + ((door.handleOffset || 500) * scale);
-      const handleHeight = scaledHeight * 0.6;
+      const handleY = door.handlePosition === 'bottom'
+        ? offsetY + scaledHeight - scaledFrameThickness / 2
+        : offsetY + ((door.handleOffset || 500) * scale);
+      const handleHeight = door.handlePosition === 'bottom' ? scaledWidth * 0.3 : scaledHeight * 0.6;
       
       const hingeX = door.hingePosition === 'left' ? offsetX : offsetX + scaledWidth;
       const hingeTopY = offsetY + 50;
@@ -186,20 +188,70 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
           {/* Handle */}
           {door.handlePosition !== 'none' && (
             <g>
-              <rect x={handleX - 3} y={handleY} width={6} height={handleHeight} fill="#FFD700" stroke="#DAA520" strokeWidth="1" rx="2" />
-              <circle cx={handleX} cy={handleY + handleHeight / 2} r={8} fill="#FFD700" stroke="#DAA520" strokeWidth="1" />
+              {door.handlePosition === 'bottom' ? (
+                <>
+                  <rect x={handleX - handleHeight / 2} y={handleY - 3} width={handleHeight} height={6} fill="#FFD700" stroke="#DAA520" strokeWidth="1" rx="2" />
+                  <circle cx={handleX} cy={handleY} r={8} fill="#FFD700" stroke="#DAA520" strokeWidth="1" />
+                </>
+              ) : (
+                <>
+                  <rect x={handleX - 3} y={handleY} width={6} height={handleHeight} fill="#FFD700" stroke="#DAA520" strokeWidth="1" rx="2" />
+                  <circle cx={handleX} cy={handleY + handleHeight / 2} r={8} fill="#FFD700" stroke="#DAA520" strokeWidth="1" />
+                </>
+              )}
+            </g>
+          )}
+          
+          {/* 3 Lines on handle side */}
+          {door.handlePosition === 'left' && (
+            <g>
+              <line x1={offsetX + 2} y1={offsetY + scaledHeight * 0.25} x2={offsetX + 2} y2={offsetY + scaledHeight * 0.35} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + 2} y1={offsetY + scaledHeight * 0.45} x2={offsetX + 2} y2={offsetY + scaledHeight * 0.55} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + 2} y1={offsetY + scaledHeight * 0.65} x2={offsetX + 2} y2={offsetY + scaledHeight * 0.75} stroke="#FFD700" strokeWidth="3" />
+            </g>
+          )}
+          {door.handlePosition === 'right' && (
+            <g>
+              <line x1={offsetX + scaledWidth - 2} y1={offsetY + scaledHeight * 0.25} x2={offsetX + scaledWidth - 2} y2={offsetY + scaledHeight * 0.35} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + scaledWidth - 2} y1={offsetY + scaledHeight * 0.45} x2={offsetX + scaledWidth - 2} y2={offsetY + scaledHeight * 0.55} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + scaledWidth - 2} y1={offsetY + scaledHeight * 0.65} x2={offsetX + scaledWidth - 2} y2={offsetY + scaledHeight * 0.75} stroke="#FFD700" strokeWidth="3" />
+            </g>
+          )}
+          {door.handlePosition === 'bottom' && (
+            <g>
+              <line x1={offsetX + scaledWidth * 0.25} y1={offsetY + scaledHeight - 2} x2={offsetX + scaledWidth * 0.35} y2={offsetY + scaledHeight - 2} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + scaledWidth * 0.45} y1={offsetY + scaledHeight - 2} x2={offsetX + scaledWidth * 0.55} y2={offsetY + scaledHeight - 2} stroke="#FFD700" strokeWidth="3" />
+              <line x1={offsetX + scaledWidth * 0.65} y1={offsetY + scaledHeight - 2} x2={offsetX + scaledWidth * 0.75} y2={offsetY + scaledHeight - 2} stroke="#FFD700" strokeWidth="3" />
             </g>
           )}
           
           {/* Hinges */}
-          <circle cx={hingeX} cy={hingeTopY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
-          <circle cx={hingeX} cy={hingeTopY} r={3} fill="#333" />
-          <circle cx={hingeX} cy={hingeBottomY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
-          <circle cx={hingeX} cy={hingeBottomY} r={3} fill="#333" />
-          {(door.hingeQuantity || 2) >= 3 && (
+          {door.hingePosition !== 'none' && door.hingePosition !== 'top' && (
             <>
-              <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={6} fill="#666" stroke="#333" strokeWidth="1" />
-              <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={3} fill="#333" />
+              <circle cx={hingeX} cy={hingeTopY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+              <circle cx={hingeX} cy={hingeTopY} r={3} fill="#333" />
+              <circle cx={hingeX} cy={hingeBottomY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+              <circle cx={hingeX} cy={hingeBottomY} r={3} fill="#333" />
+              {(door.hingeQuantity || 2) >= 3 && (
+                <>
+                  <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+                  <circle cx={hingeX} cy={offsetY + scaledHeight / 2} r={3} fill="#333" />
+                </>
+              )}
+            </>
+          )}
+          {door.hingePosition === 'top' && (
+            <>
+              <circle cx={offsetX + scaledWidth * 0.25} cy={offsetY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+              <circle cx={offsetX + scaledWidth * 0.25} cy={offsetY} r={3} fill="#333" />
+              <circle cx={offsetX + scaledWidth * 0.75} cy={offsetY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+              <circle cx={offsetX + scaledWidth * 0.75} cy={offsetY} r={3} fill="#333" />
+              {(door.hingeQuantity || 2) >= 3 && (
+                <>
+                  <circle cx={offsetX + scaledWidth / 2} cy={offsetY} r={6} fill="#666" stroke="#333" strokeWidth="1" />
+                  <circle cx={offsetX + scaledWidth / 2} cy={offsetY} r={3} fill="#333" />
+                </>
+              )}
             </>
           )}
           
@@ -670,7 +722,9 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
   const frameInnerGap = 3; // Gap between double lines
   
   // Handle calculations
-  const handleSide = door.handlePosition === 'left' ? 'LEFT' : door.handlePosition === 'right' ? 'RIGHT' : door.handlePosition === 'center' ? 'CENTER' : 'NONE';
+  const handleSide = door.handlePosition === 'left' ? 'LEFT' : 
+                     door.handlePosition === 'right' ? 'RIGHT' : 
+                     door.handlePosition === 'bottom' ? 'BOTTOM' : 'NONE';
   const handleOffset = door.handleOffset || 100;
   const handleTopClearance = handleOffset;
   const handleBottomClearance = doorHeightMm - handleOffset - (doorHeightMm - 2 * handleOffset);
@@ -681,8 +735,12 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
     : door.handlePosition === 'right'
     ? offsetX + scaledWidth - 5
     : offsetX + scaledWidth / 2;
-  const handleYTop = offsetY + (handleTopClearance * scale);
-  const handleYBottom = offsetY + scaledHeight - (handleBottomClearance * scale);
+  const handleYTop = door.handlePosition === 'bottom' 
+    ? offsetY + scaledHeight - 10
+    : offsetY + (handleTopClearance * scale);
+  const handleYBottom = door.handlePosition === 'bottom'
+    ? offsetY + scaledHeight - 5
+    : offsetY + scaledHeight - (handleBottomClearance * scale);
   
   // Hinge positions
   const hingePositions = door.hingePositionMm || [];
@@ -799,6 +857,7 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
     // Standard openable door
     const handleSideIsLeft = door.handlePosition === 'left';
     const handleSideIsRight = door.handlePosition === 'right';
+    const handleSideIsBottom = door.handlePosition === 'bottom';
     
     doorSpecificHTML = `
       <!-- Outer frame outline (main body) -->
@@ -819,55 +878,80 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
         <line x1="${offsetX + scaledWidth - frameThickness / 2}" y1="${offsetY}" 
               x2="${offsetX + scaledWidth - frameThickness / 2}" y2="${offsetY + scaledHeight}" 
               stroke="#000" stroke-width="1.5"/>
-      ` : ''}
-      
-      <!-- Opening arc (swing direction) -->
-      ${hingePositions.length > 0 ? `
-        <path d="M ${hingeSide === 'left' ? offsetX + scaledWidth : offsetX} ${offsetY + scaledHeight / 2} 
-                 Q ${hingeSide === 'left' ? offsetX + scaledWidth + 40 : offsetX - 40} ${offsetY + scaledHeight / 2}, 
-                   ${hingeSide === 'left' ? offsetX + scaledWidth + 30 : offsetX - 30} ${offsetY + scaledHeight / 2 + 50}" 
-              stroke="#4CAF50" stroke-width="1.5" fill="none" stroke-dasharray="5,3"/>
-        <text x="${hingeSide === 'left' ? offsetX + scaledWidth + 35 : offsetX - 35}" 
-              y="${offsetY + scaledHeight / 2 + 60}" 
-              text-anchor="middle" font-size="8" font-family="Arial, sans-serif" fill="#4CAF50">
-          SWING
-        </text>
+      ` : handleSideIsBottom ? `
+        <line x1="${offsetX}" y1="${offsetY + scaledHeight - frameThickness / 2}" 
+              x2="${offsetX + scaledWidth}" y2="${offsetY + scaledHeight - frameThickness / 2}" 
+              stroke="#000" stroke-width="1.5"/>
       ` : ''}
     `;
   }
   
   // Generate hinge callouts - with prominent dark spots
   let hingesHTML = '';
-  hingePositions.forEach((positionMm, index) => {
-    const scaledY = offsetY + (positionMm * scale);
-    if (scaledY >= offsetY && scaledY <= offsetY + scaledHeight) {
-      const labelX = hingeX + (hingeSide === 'left' ? -60 : 60);
+  
+  if (hingeSide === 'top') {
+    // Top hinges - draw horizontally along the top edge
+    // Distribute evenly based on number of hinges
+    const hingeCount = hingePositions.length || 2;
+    const spacing = scaledWidth / (hingeCount + 1);
+    
+    for (let i = 0; i < hingeCount; i++) {
+      const scaledX = offsetX + spacing * (i + 1);
+      const labelY = offsetY - 50;
       hingesHTML += `
         <g>
-          <!-- Hinge mounting point as dark olive spot on frame -->
-          <circle cx="${hingeX}" cy="${scaledY}" r="8" fill="#3d5a3d" stroke="#000" stroke-width="2.5"/>
-          <circle cx="${hingeX}" cy="${scaledY}" r="3" fill="#1a1a1a"/>
+          <!-- Hinge mounting point as dark olive spot on top frame -->
+          <circle cx="${scaledX}" cy="${offsetY}" r="8" fill="#3d5a3d" stroke="#000" stroke-width="2.5"/>
+          <circle cx="${scaledX}" cy="${offsetY}" r="3" fill="#1a1a1a"/>
           
           <!-- Leader line -->
-          <line x1="${hingeX + (hingeSide === 'left' ? -10 : 10)}" y1="${scaledY}" 
-                x2="${labelX - (hingeSide === 'left' ? 8 : -8)}" y2="${scaledY}" 
+          <line x1="${scaledX}" y1="${offsetY - 8}" 
+                x2="${scaledX}" y2="${labelY + 8}" 
                 stroke="#666" stroke-width="1.5"/>
           
           <!-- Hinge label -->
-          <rect x="${labelX - (hingeSide === 'left' ? 50 : -2)}" y="${scaledY - 12}" 
-                width="50" height="24" fill="#FFF" stroke="#666" stroke-width="1"/>
-          <text x="${labelX - (hingeSide === 'left' ? 25 : -27)}" y="${scaledY - 2}" text-anchor="middle" 
+          <rect x="${scaledX - 25}" y="${labelY - 10}" 
+                width="50" height="16" fill="#FFF" stroke="#666" stroke-width="1"/>
+          <text x="${scaledX}" y="${labelY }" text-anchor="middle" 
                 font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
-            HINGE ${index + 1}
-          </text>
-          <text x="${labelX - (hingeSide === 'left' ? 25 : -27)}" y="${scaledY + 8}" text-anchor="middle" 
-                font-size="7" font-family="Arial, sans-serif" fill="#666">
-            ${hingeProduct?.code || door.hingeCode || 'STD'}
+            HINGE ${i + 1}
           </text>
         </g>
       `;
     }
-  });
+  } else {
+    // Left/Right hinges - draw vertically along the side
+    hingePositions.forEach((positionMm, index) => {
+      const scaledY = offsetY + (positionMm * scale);
+      if (scaledY >= offsetY && scaledY <= offsetY + scaledHeight) {
+        const labelX = hingeX + (hingeSide === 'left' ? -60 : 60);
+        hingesHTML += `
+          <g>
+            <!-- Hinge mounting point as dark olive spot on frame -->
+            <circle cx="${hingeX}" cy="${scaledY}" r="8" fill="#3d5a3d" stroke="#000" stroke-width="2.5"/>
+            <circle cx="${hingeX}" cy="${scaledY}" r="3" fill="#1a1a1a"/>
+            
+            <!-- Leader line -->
+            <line x1="${hingeX + (hingeSide === 'left' ? -10 : 10)}" y1="${scaledY}" 
+                  x2="${labelX - (hingeSide === 'left' ? 8 : -8)}" y2="${scaledY}" 
+                  stroke="#666" stroke-width="1.5"/>
+            
+            <!-- Hinge label -->
+            <rect x="${labelX - (hingeSide === 'left' ? 50 : -2)}" y="${scaledY - 12}" 
+                  width="50" height="24" fill="#FFF" stroke="#666" stroke-width="1"/>
+            <text x="${labelX - (hingeSide === 'left' ? 25 : -27)}" y="${scaledY - 2}" text-anchor="middle" 
+                  font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
+              HINGE ${index + 1}
+            </text>
+            <text x="${labelX - (hingeSide === 'left' ? 25 : -27)}" y="${scaledY + 8}" text-anchor="middle" 
+                  font-size="7" font-family="Arial, sans-serif" fill="#666">
+              ${hingeProduct?.code || door.hingeCode || 'STD'}
+            </text>
+          </g>
+        `;
+      }
+    });
+  }
   
   // Generate divider lines
   let dividersHTML = '';
@@ -973,20 +1057,20 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
       ${door.hasHandle ? `
         <g>
           <!-- Handle callout line -->
-          <line x1="${handleX + (door.handlePosition === 'right' ? -8 : 8)}" y1="${(handleYTop + handleYBottom) / 2}" 
-                x2="${handleX + (door.handlePosition === 'right' ? -45 : 45)}" y2="${(handleYTop + handleYBottom) / 2}" 
+          <line x1="${handleX + (door.handlePosition === 'bottom' ? 0 : door.handlePosition === 'right' ? -8 : 8)}" y1="${door.handlePosition === 'bottom' ? offsetY + scaledHeight + 15 : (handleYTop + handleYBottom) / 2}" 
+                x2="${handleX + (door.handlePosition === 'bottom' ? 0 : door.handlePosition === 'right' ? -45 : 45)}" y2="${door.handlePosition === 'bottom' ? offsetY + scaledHeight + 35 : (handleYTop + handleYBottom) / 2}" 
                 stroke="#B8860B" stroke-width="0.8"/>
           
           <!-- Handle label -->
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 10}" 
+          <text x="${handleX + (door.handlePosition === 'bottom' ? 0 : door.handlePosition === 'right' ? -85 : 85)}" y="${door.handlePosition === 'bottom' ? offsetY + scaledHeight + 42 : (handleYTop + handleYBottom) / 2 - 10}" 
                 text-anchor="middle" font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#B8860B">
             HANDLE
           </text>
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 + 3}" 
+          <text x="${handleX + (door.handlePosition === 'bottom' ? 0 : door.handlePosition === 'right' ? -85 : 85)}" y="${door.handlePosition === 'bottom' ? offsetY + scaledHeight + 55 : (handleYTop + handleYBottom) / 2 + 3}" 
                 text-anchor="middle" font-size="7" font-family="Arial, sans-serif" fill="#666">
-            ${handleProfile?.name || 'Full Length'}
+            ${handleProfile?.name || 'Standard Handle Profile'}
           </text>
-          <text x="${handleX + (door.handlePosition === 'right' ? -85 : 85)}" y="${(handleYTop + handleYBottom) / 2 - 3.5}" 
+          <text x="${handleX + (door.handlePosition === 'bottom' ? 0 : door.handlePosition === 'right' ? -85 : 85)}" y="${door.handlePosition === 'bottom' ? offsetY + scaledHeight + 48.5 : (handleYTop + handleYBottom) / 2 - 3.5}" 
                 text-anchor="middle" font-size="7" font-family="Arial, sans-serif" fill="#666">
             ${handleProfile?.code || 'HP001'}
           </text>
@@ -1005,8 +1089,8 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
               stroke="#666" stroke-width="1" marker-start="url(#arrowStart)" marker-end="url(#arrowEnd)"/>
         <rect x="${offsetX + scaledWidth / 2 - 40}" y="${offsetY - 37}" width="80" height="18" 
               fill="#FFF" stroke="#666" stroke-width="1"/>
-        <text x="${offsetX + scaledWidth / 2}" y="${offsetY - 23}" text-anchor="middle" 
-              font-size="11" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
+        <text x="${offsetX + scaledWidth / 2}" y="${offsetY - 24}" text-anchor="middle" 
+              font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
           WIDTH: ${Math.round(doorWidthMm)}mm
         </text>
       </g>
@@ -1016,52 +1100,16 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
         <line x1="${offsetX + scaledWidth + 30}" y1="${offsetY}" 
               x2="${offsetX + scaledWidth + 30}" y2="${offsetY + scaledHeight}" 
               stroke="#666" stroke-width="1" marker-start="url(#arrowStart)" marker-end="url(#arrowEnd)"/>
-        <rect x="${offsetX + scaledWidth + 38}" y="${offsetY + scaledHeight / 2 - 9}" width="90" height="18" 
+        <rect x="${offsetX + scaledWidth + 38}" y="${offsetY + scaledHeight / 2 - 10}" width="90" height="20" 
               fill="#FFF" stroke="#666" stroke-width="1"/>
-        <text x="${offsetX + scaledWidth + 83}" y="${offsetY + scaledHeight / 2 + 4}" text-anchor="middle" 
-              font-size="11" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
+        <text x="${offsetX + scaledWidth + 80}" y="${offsetY + scaledHeight / 2 + 4}" text-anchor="middle" 
+              font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
           HEIGHT: ${Math.round(doorHeightMm)}mm
         </text>
       </g>
       
-      <!-- Left side handle clearances (if handle exists) -->
-      ${door.hasHandle ? `
-      <g>
-        <!-- Extension lines (thin) -->
-        <line x1="${offsetX}" y1="${offsetY}" x2="${offsetX - 25}" y2="${offsetY}" 
-              stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
-        <line x1="${offsetX}" y1="${handleYTop}" x2="${offsetX - 25}" y2="${handleYTop}" 
-              stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
-        <line x1="${offsetX}" y1="${handleYBottom}" x2="${offsetX - 25}" y2="${handleYBottom}" 
-              stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
-        <line x1="${offsetX}" y1="${offsetY + scaledHeight}" x2="${offsetX - 25}" y2="${offsetY + scaledHeight}" 
-              stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
-        
-        <!-- Top clearance -->
-        <line x1="${offsetX - 20}" y1="${offsetY}" x2="${offsetX - 20}" y2="${handleYTop}" 
-              stroke="#666" stroke-width="0.8"/>
-        <text x="${offsetX - 24}" y="${(offsetY + handleYTop) / 2 + 3}" text-anchor="end" 
-              font-size="8" font-family="Arial, sans-serif" fill="#666">
-          ${Math.round(handleTopClearance)}
-        </text>
-        
-        <!-- Handle length -->
-        <line x1="${offsetX - 12}" y1="${handleYTop}" x2="${offsetX - 12}" y2="${handleYBottom}" 
-              stroke="#B8860B" stroke-width="1.5"/>
-        <text x="${offsetX - 16}" y="${(handleYTop + handleYBottom) / 2 + 3}" text-anchor="end" 
-              font-size="8" font-family="Arial, sans-serif" font-weight="bold" fill="#B8860B">
-          ${Math.round(handleLength)}
-        </text>
-        
-        <!-- Bottom clearance -->
-        <line x1="${offsetX - 20}" y1="${handleYBottom}" x2="${offsetX - 20}" y2="${offsetY + scaledHeight}" 
-              stroke="#666" stroke-width="0.8"/>
-        <text x="${offsetX - 24}" y="${(handleYBottom + offsetY + scaledHeight) / 2 + 3}" text-anchor="end" 
-              font-size="8" font-family="Arial, sans-serif" fill="#666">
-          ${Math.round(handleBottomClearance)}
-        </text>
-      </g>
-      ` : ''}
+      <!-- Left side handle clearances (if handle exists and not bottom position) -->
+      <!-- Left side handle clearances removed as requested -->
       
       <!-- Technical Notes Box -->
       <g>

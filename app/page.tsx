@@ -380,23 +380,31 @@ export default function Home() {
   // Auto-calculate hinge quantity and positions when height changes
   useEffect(() => {
     const heightMm = convertToMm(currentDoor.height, currentDoor.measurementUnit);
-    
+    // Auto-set hinge position based on handle position
+    let autoHingePosition = currentDoor.hingePosition;
+    if (currentDoor.handlePosition === 'left') autoHingePosition = 'right';
+    else if (currentDoor.handlePosition === 'right') autoHingePosition = 'left';
+    else if (currentDoor.handlePosition === 'bottom') autoHingePosition = 'top';
+
     if (heightMm > 0 && (currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge')) {
       // Auto-calculate hinge quantity based on height
       const calculatedHingeQty = calculateHingeQuantityByHeight(heightMm);
-      
       // Calculate positions
       const positions = calculateHingePositions(heightMm, calculatedHingeQty);
-      
-      if (currentDoor.hingeQuantity !== calculatedHingeQty || JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm)) {
+      if (
+        currentDoor.hingeQuantity !== calculatedHingeQty ||
+        JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm) ||
+        currentDoor.hingePosition !== autoHingePosition
+      ) {
         setCurrentDoor(prev => ({
           ...prev,
           hingeQuantity: calculatedHingeQty,
-          hingePositionMm: positions
+          hingePositionMm: positions,
+          hingePosition: autoHingePosition
         }));
       }
     }
-  }, [currentDoor.height, currentDoor.measurementUnit, currentDoor.doorType, masterData.hingeCalculationSettings]);
+  }, [currentDoor.height, currentDoor.measurementUnit, currentDoor.doorType, currentDoor.handlePosition, masterData.hingeCalculationSettings]);
 
   const handleAddDoor = () => {
     if (!currentDoor.doorName || !currentDoor.height || !currentDoor.width) {
@@ -3412,7 +3420,7 @@ export default function Home() {
                     >
                       <option value="left">Left</option>
                       <option value="right">Right</option>
-                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
                       <option value="none">None</option>
                     </select>
                   </div>
@@ -3428,7 +3436,7 @@ export default function Home() {
                       <option value="left">Left</option>
                       <option value="right">Right</option>
                       <option value="top">Top</option>
-                      <option value="bottom">Bottom</option>
+                      <option value="none">None</option>
                     </select>
                   </div>
                 </div>

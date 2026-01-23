@@ -72,8 +72,8 @@ export interface ConnectorType {
 
 export type MeasurementUnit = 'mm' | 'inches';
 export type DoorType = 'openable' | 'sliding' | 'air-hinge' | 'pin-hinge';
-export type HandlePosition = 'left' | 'right' | 'center' | 'none';
-export type HingePosition = 'left' | 'right' | 'top' | 'bottom';
+export type HandlePosition = 'left' | 'right' | 'bottom' | 'none';
+export type HingePosition = 'left' | 'right' | 'top' | 'none';
 export type OpeningDirection = 'left' | 'right' | 'both' | 'none';
 
 export interface DividerConfig {

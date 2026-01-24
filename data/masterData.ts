@@ -80,37 +80,37 @@ export const glassTypes: GlassType[] = [
   {
     code: 'GL001',
     name: 'Clear Glass 5mm',
-    pricePerSqMm: 0.000484,
+    pricePerSqFt: 4.5, 
     thickness: 5,
   },
   {
     code: 'GL002',
     name: 'Tinted Glass 5mm',
-    pricePerSqMm: 0.000592,
+    pricePerSqFt: 5.5,
     thickness: 5,
   },
   {
     code: 'GL003',
     name: 'Frosted Glass 5mm',
-    pricePerSqMm: 0.000646,
+    pricePerSqFt: 6.0,
     thickness: 5,
   },
   {
     code: 'GL004',
     name: 'Clear Glass 8mm',
-    pricePerSqMm: 0.000700,
+    pricePerSqFt: 7.0,
     thickness: 8,
   },
   {
     code: 'GL005',
     name: 'Toughened Glass 10mm',
-    pricePerSqMm: 0.000969,
+    pricePerSqFt: 9.0,
     thickness: 10,
   },
   {
     code: 'GL006',
     name: 'Laminated Glass 6mm',
-    pricePerSqMm: 0.000915,
+    pricePerSqFt: 10.0,
     thickness: 6,
   },
 ];

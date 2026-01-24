@@ -595,7 +595,7 @@ export default function Home() {
     const newGlass: GlassType = {
       code: `GL${String(masterData.glassTypes.length + 1).padStart(3, '0')}`,
       name: 'New Glass Type',
-      pricePerSqMm: 0.000538,
+      pricePerSqFt: 5.0,
       thickness: 5,
     };
     setMasterData(prev => ({
@@ -967,7 +967,7 @@ export default function Home() {
                     </div>
                     <div className="space-y-3">
                       {masterData.frameProfiles.map((profile, index) => (
-                        <div key={profile.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
@@ -1135,7 +1135,7 @@ export default function Home() {
                     </div>
                     <div className="space-y-3">
                       {masterData.handleProfiles.map((profile, index) => (
-                        <div key={profile.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
@@ -1223,7 +1223,7 @@ export default function Home() {
                     </div>
                     <div className="space-y-3">
                       {masterData.glassTypes.map((glass, index) => (
-                        <div key={glass.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
@@ -1244,12 +1244,12 @@ export default function Home() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Sq.mm (₹)</label>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Price per Sq.ft (₹)</label>
                               <input
                                 type="number"
                                 step="0.000001"
-                                value={glass.pricePerSqMm ?? ''}
-                                onChange={e => updateGlassType(index, { ...glass, pricePerSqMm: parseFloat(e.target.value) || 0 })}
+                                value={glass.pricePerSqFt ?? ''}
+                                onChange={e => updateGlassType(index, { ...glass, pricePerSqFt: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
@@ -1320,7 +1320,7 @@ export default function Home() {
                     </div>
                     <div className="space-y-3">
                       {masterData.connectorTypes.map((connector, index) => (
-                        <div key={connector.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
@@ -1875,7 +1875,7 @@ export default function Home() {
                     
                     <div className="space-y-3 max-h-[600px] overflow-y-auto">
                       {(masterData.slidingBundles || []).map((bundle, index) => (
-                        <div key={bundle.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Bundle Code</label>
@@ -3351,8 +3351,8 @@ export default function Home() {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   >
-                    {masterData.frameProfiles.map(profile => (
-                      <option key={profile.code} value={profile.code}>
+                    {masterData.frameProfiles.map((profile, index) => (
+                      <option key={index} value={profile.code}>
                         {profile.code} - {profile.name} ({profile.width}x{profile.height}mm) - ₹{profile.pricePerMm}/mm
                       </option>
                     ))}
@@ -3373,7 +3373,7 @@ export default function Home() {
                     <option value="">None (No Glass)</option>
                     {filteredOptions.glassTypes.map(glass => (
                       <option key={glass.code} value={glass.code}>
-                        {glass.name} - ₹{glass.pricePerSqMm}/sq.mm
+                        {glass.name} - ₹{glass.pricePerSqFt}/sq.ft
                       </option>
                     ))}
                   </select>

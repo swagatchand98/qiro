@@ -58,7 +58,7 @@ export interface HandleProfile {
 export interface GlassType {
   code: string;
   name: string;
-  pricePerSqMm: number;
+  pricePerSqFt: number;
   thickness?: number; // mm
   imageUrl?: string;
 }

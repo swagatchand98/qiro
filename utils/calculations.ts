@@ -266,28 +266,24 @@ export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme =
   };
 };
 
-// Calculate glass area in square millimeters
+// Calculate glass area in square feet
 export const calculateGlassArea = (
   door: DoorConfiguration,
   wastagePercentage: number
 ): { glassArea: number; glassAreaWithWastage: number } => {
   const heightMm = convertToMm(door.height, door.measurementUnit);
   const widthMm = convertToMm(door.width, door.measurementUnit);
-  
   const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
   const frameThickness = frameProfile?.width || 25;
-  
   // Glass area = door area minus frame area
   const glassHeightMm = heightMm - (2 * frameThickness);
   const glassWidthMm = widthMm - (2 * frameThickness);
-  
   const glassAreaMm2 = glassHeightMm * glassWidthMm;
-  
+  const glassAreaSqFt = glassAreaMm2 / 929.0304;
   // Apply wastage percentage
-  const glassAreaWithWastage = glassAreaMm2 * (1 + wastagePercentage / 100);
-  
+  const glassAreaWithWastage = glassAreaSqFt * (1 + wastagePercentage / 100);
   return {
-    glassArea: parseFloat(glassAreaMm2.toFixed(2)),
+    glassArea: parseFloat(glassAreaSqFt.toFixed(2)),
     glassAreaWithWastage: parseFloat(glassAreaWithWastage.toFixed(2)),
   };
 };
@@ -328,7 +324,7 @@ export const calculateDoorCosts = (
     wastagePercentage
   );
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
-  const glassCost = glassAreaWithWastage * (glassType?.pricePerSqMm || 0) * door.quantity;
+  const glassCost = glassAreaWithWastage * (glassType?.pricePerSqFt || 0) * door.quantity;
   
   // AUTO-CALCULATE: Connectors required
   const connectorsRequired = door.connectorQuantity || calculateConnectorsRequired(
@@ -446,8 +442,8 @@ export const calculateDoorCosts = (
     handleCost: parseFloat(handleCost.toFixed(2)),
     
     // Glass
-    glassArea,
-    glassAreaWithWastage,
+    glassArea, // in sq. ft
+    glassAreaWithWastage, // in sq. ft
     glassCost: parseFloat(glassCost.toFixed(2)),
     
     // Connectors

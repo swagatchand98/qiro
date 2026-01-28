@@ -156,7 +156,6 @@ export interface DoorCalculation {
   
   // Glass Calculations
   glassArea: number; // sqft
-  glassAreaWithWastage: number; // sqft
   glassCost: number;
   
   // Connector Calculations
@@ -289,7 +288,6 @@ export interface QuotationData {
   additionalComponents: AdditionalComponent[];
   optionalItems: OptionalItem[];
   gstPercentage: number;
-  glassWastagePercentage: number;
   globalDiscount: number; // percentage
 }
 
@@ -378,7 +376,6 @@ export interface MasterData {
   validationLimits: ValidationLimits; // Door dimension validation limits
   hingeCalculationSettings: HingeCalculationSettings; // Automatic hinge quantity calculation
   defaultGST: number;
-  defaultGlassWastage: number;
   companyInfo?: CompanyInfo; // Company details for invoices
 }
 

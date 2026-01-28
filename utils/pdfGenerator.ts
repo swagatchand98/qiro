@@ -477,7 +477,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
       ['Handle Profile', handleProfile ? `${handleProfile.name} (${handleProfile.code})` : 'None'],
       ['Handle Position', door.handlePosition],
       ['Glass Type', `${glassType?.name || 'N/A'} (${glassType?.code})`],
-      ['Glass Area', `${calc.glassArea} sq.ft (${calc.glassAreaWithWastage} sq.ft with wastage)`],
+      ['Glass Area', `${calc.glassArea} sq.ft`],
       ['Hinge Position', door.hingePosition],
       ['Hinge Code', door.hingeCode || 'N/A'],
       ['Hinge Quantity', (door.hingeQuantity || 2).toString()],
@@ -554,7 +554,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
     costItems.push({
       item: 'Glass',
       spec: `${glassType?.name} (${glassType?.code})`,
-      qty: `${calc.glassAreaWithWastage.toFixed(2)} sq.ft`,
+      qty: `${calc.glassArea.toFixed(2)} sq.ft`,
       cost: calc.glassCost
     });
     
@@ -1170,19 +1170,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
   
   doc.setFont('NeueHaasDisplay', 'bold');
   doc.setFontSize(9);
-  doc.text('2. Glass Wastage', margin, yPos);
-  yPos += 5;
-  
-  doc.setFont('NeueHaasDisplay', 'normal');
-  doc.setFontSize(8);
-  const wastageText = `Glass wastage of ${quotation.glassWastagePercentage}% has been applied to account for cutting and fitting. Actual wastage may vary based on site conditions.`;
-  const wastageLines = doc.splitTextToSize(wastageText, pageWidth - 2 * margin);
-  doc.text(wastageLines, margin, yPos);
-  yPos += wastageLines.length * 4 + 8;
-  
-  doc.setFont('NeueHaasDisplay', 'bold');
-  doc.setFontSize(9);
-  doc.text('3. Quotation Validity', margin, yPos);
+  doc.text('2. Quotation Validity', margin, yPos);
   yPos += 5;
   
   doc.setFont('NeueHaasDisplay', 'normal');

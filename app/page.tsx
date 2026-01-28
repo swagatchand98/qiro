@@ -238,7 +238,6 @@ export default function Home() {
     additionalComponents: [],
     optionalItems: [],
     gstPercentage: masterData.defaultGST,
-    glassWastagePercentage: masterData.defaultGlassWastage,
     globalDiscount: 0,
   });
 
@@ -331,9 +330,9 @@ export default function Home() {
   // Calculate door costs
   const doorCalculations = useMemo<DoorCalculation[]>(() => {
     return quotation.doors.map(door =>
-      calculateDoorCosts(door, quotation.glassWastagePercentage)
+      calculateDoorCosts(door)
     );
-  }, [quotation.doors, quotation.glassWastagePercentage]);
+  }, [quotation.doors]);
 
   // Calculate cost summary
   const costSummary = useMemo<CostSummary>(() => {
@@ -1247,10 +1246,11 @@ export default function Home() {
                               <label className="block text-xs font-medium text-gray-700 mb-1">Price per Sq.ft (₹)</label>
                               <input
                                 type="number"
-                                step="0.000001"
+                                step="0.01"
                                 value={glass.pricePerSqFt ?? ''}
                                 onChange={e => updateGlassType(index, { ...glass, pricePerSqFt: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                placeholder="e.g., 45.00"
                               />
                             </div>
                             <div>
@@ -2324,18 +2324,6 @@ export default function Home() {
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                         />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Default Glass Wastage %</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          value={masterData.defaultGlassWastage}
-                          onChange={e => setMasterData(prev => ({ ...prev, defaultGlassWastage: parseFloat(e.target.value) || 0 }))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                        />
-                      </div>
                       
                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 mt-6">
                         <h4 className="text-md font-semibold text-purple-800 mb-3">📐 Divider Settings</h4>
@@ -3230,7 +3218,7 @@ export default function Home() {
                     step="1"
                     value={currentDoor.width || ''}
                     onChange={e => {
-                      const value = parseFloat(e.target.value) || 0;
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       const minWidth = masterData.validationLimits?.minWidth || 100;
                       const maxWidth = masterData.validationLimits?.maxWidth || 10000;
                       
@@ -3242,6 +3230,7 @@ export default function Home() {
                         setWidthError('');
                       }
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 ${
                       widthError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'
                     }`}
@@ -3266,7 +3255,7 @@ export default function Home() {
                     step="1"
                     value={currentDoor.height || ''}
                     onChange={e => {
-                      const value = parseFloat(e.target.value) || 0;
+                      const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       const minHeight = masterData.validationLimits?.minHeight || 100;
                       const maxHeight = masterData.validationLimits?.maxHeight || 10000;
                       
@@ -3278,6 +3267,7 @@ export default function Home() {
                         setHeightError('');
                       }
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 ${
                       heightError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-black focus:border-black'
                     }`}
@@ -3299,7 +3289,8 @@ export default function Home() {
                     type="number"
                     min="1"
                     value={currentDoor.quantity}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, quantity: e.target.value === '' ? 1 : parseInt(e.target.value) }))}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -3450,7 +3441,8 @@ export default function Home() {
                       type="number"
                       min="2"
                       value={currentDoor.hingeQuantity || 2}
-                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, parseInt(e.target.value) || 2) }))}
+                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, e.target.value === '' ? 2 : parseInt(e.target.value)) }))}
+                      onWheel={(e) => e.currentTarget.blur()}
                       className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                       placeholder="2"
                     />
@@ -3459,10 +3451,51 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Connectors Configuration */}
+            <div className="bg-teal-50 p-4 rounded-lg border border-teal-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                <span className="bg-teal-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">5</span>
+                Connectors Configuration
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Connectors * {filteredOptions.connectors.length < masterData.connectorTypes.length && (
+                      <span className="text-xs text-gray-500">(filtered by frame)</span>
+                    )}
+                  </label>
+                  <select
+                    value={currentDoor.connectorCode || ''}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, connectorCode: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  >
+                    {filteredOptions.connectors.map(connector => (
+                      <option key={connector.code} value={connector.code}>
+                        {connector.name} - ₹{connector.pricePerUnit}/unit
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Connectors Qty (nos) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={currentDoor.connectorQuantity || ''}
+                    onChange={e => setCurrentDoor(prev => ({ ...prev, connectorQuantity: e.target.value === '' ? 0 : parseInt(e.target.value) }))}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Additional Hardware */}
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
               <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                <span className="bg-purple-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">5</span>
+                <span className="bg-purple-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">6</span>
                 Additional Hardware (Optional)
               </h3>
               <div className="grid grid-cols-2 gap-4">
@@ -3598,7 +3631,7 @@ export default function Home() {
                   className="mr-2 rounded"
                 />
                 <label htmlFor="hasDividers" className="text-sm font-semibold text-gray-700 flex items-center">
-                  <span className="bg-green-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">6</span>
+                  <span className="bg-green-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">7</span>
                   Divider Requirements (if any)
                 </label>
               </div>
@@ -3711,10 +3744,9 @@ export default function Home() {
             {/* Door Image Upload */}
             <div className="bg-pink-50 p-4 rounded-lg border border-pink-200">
               <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                <span className="bg-pink-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">7</span>
+                <span className="bg-pink-700 text-white rounded-full w-5 h-5 flex items-center justify-center mr-2 text-xs">8</span>
                 Door Image (Optional)
               </h3>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-pink-400 transition-colors bg-white">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-pink-400 transition-colors bg-white">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Upload Door Image
@@ -3774,7 +3806,7 @@ export default function Home() {
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Total Profile Length</label>
                       <div className="text-lg font-bold text-gray-900">
                         {(() => {
-                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          const calc = calculateDoorCosts(currentDoor);
                           return calc.totalProfileLength.toFixed(2);
                         })()}m
                       </div>
@@ -3785,7 +3817,7 @@ export default function Home() {
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Connectors Required</label>
                       <div className="text-lg font-bold text-gray-900">
                         {(() => {
-                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          const calc = calculateDoorCosts(currentDoor);
                           return calc.connectorsRequired;
                         })()} units
                       </div>
@@ -3797,7 +3829,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Count</label>
                         <div className="text-lg font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            const calc = calculateDoorCosts(currentDoor);
                             return calc.hingeCount || 0;
                           })()} units
                         </div>
@@ -3810,7 +3842,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Positions (mm from top)</label>
                         <div className="text-sm font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            const calc = calculateDoorCosts(currentDoor);
                             return (calc.hingePositions || []).join('mm, ') + 'mm';
                           })()}
                         </div>
@@ -3823,7 +3855,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Handle Length</label>
                         <div className="text-lg font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                            const calc = calculateDoorCosts(currentDoor);
                             return (calc.totalHandleLength || 0).toFixed(2);
                           })()}m
                         </div>
@@ -3837,7 +3869,7 @@ export default function Home() {
                           <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Length</label>
                           <div className="text-lg font-bold text-gray-900">
                             {(() => {
-                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              const calc = calculateDoorCosts(currentDoor);
                               return (calc.dividerLength || 0).toFixed(2);
                             })()}m
                           </div>
@@ -3846,7 +3878,7 @@ export default function Home() {
                           <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Connectors</label>
                           <div className="text-lg font-bold text-gray-900">
                             {(() => {
-                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              const calc = calculateDoorCosts(currentDoor);
                               return calc.dividerConnectorsRequired || 0;
                             })()} units
                           </div>
@@ -3856,11 +3888,11 @@ export default function Home() {
 
                     {/* Glass Area */}
                     <div className="bg-white p-3 rounded shadow-sm">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Glass Area (with wastage)</label>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Glass Area</label>
                       <div className="text-lg font-bold text-gray-900">
                         {(() => {
-                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
-                          return calc.glassAreaWithWastage.toFixed(2);
+                          const calc = calculateDoorCosts(currentDoor);
+                          return calc.glassArea.toFixed(2);
                         })()} sqft
                       </div>
                     </div>
@@ -3873,7 +3905,7 @@ export default function Home() {
                           <span className="text-gray-600">Frame:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              const calc = calculateDoorCosts(currentDoor);
                               return calc.frameCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3883,7 +3915,7 @@ export default function Home() {
                             <span className="text-gray-600">Handle:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.handleCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3893,7 +3925,7 @@ export default function Home() {
                           <span className="text-gray-600">Glass:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              const calc = calculateDoorCosts(currentDoor);
                               return calc.glassCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3902,7 +3934,7 @@ export default function Home() {
                           <span className="text-gray-600">Connectors:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                              const calc = calculateDoorCosts(currentDoor);
                               return calc.connectorCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3912,7 +3944,7 @@ export default function Home() {
                             <span className="text-gray-600">Hinges:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.hingeCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3923,7 +3955,7 @@ export default function Home() {
                             <span className="text-gray-600">Dividers:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.dividerCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3934,7 +3966,7 @@ export default function Home() {
                             <span className="text-gray-600">Gasket:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.gasketCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3945,7 +3977,7 @@ export default function Home() {
                             <span className="text-gray-600">Lock:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.lockCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3956,7 +3988,7 @@ export default function Home() {
                             <span className="text-gray-600">Sliding System:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                                const calc = calculateDoorCosts(currentDoor);
                                 return calc.slidingSystemCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3970,7 +4002,7 @@ export default function Home() {
                       <label className="block text-sm font-bold text-amber-900 mb-1">Total Selling Price (Per Unit)</label>
                       <div className="text-2xl font-black text-amber-900">
                         {formatCurrency((() => {
-                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          const calc = calculateDoorCosts(currentDoor);
                           return calc.totalSellingPrice;
                         })())}
                       </div>
@@ -3981,7 +4013,7 @@ export default function Home() {
                       <label className="block text-sm font-bold text-green-900 mb-1">Total Order Value (×{currentDoor.quantity})</label>
                       <div className="text-2xl font-black text-green-900">
                         {formatCurrency((() => {
-                          const calc = calculateDoorCosts(currentDoor, quotation.glassWastagePercentage);
+                          const calc = calculateDoorCosts(currentDoor);
                           return calc.totalOrderValue;
                         })())}
                       </div>
@@ -4050,54 +4082,12 @@ export default function Home() {
               </div>
             </div>
           )}
-          </div>
-        </section>
-
-        {/* Connectors & Lift Configuration */}
-        <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
-          <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">3</span>
-            Connectors & Lift Configuration
-          </h2>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Connectors * {filteredOptions.connectors.length < masterData.connectorTypes.length && (
-                  <span className="text-xs text-gray-500">(filtered by frame)</span>
-                )}
-              </label>
-              <select
-                value={currentDoor.connectorCode || ''}
-                onChange={e => setCurrentDoor(prev => ({ ...prev, connectorCode: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              >
-                {filteredOptions.connectors.map(connector => (
-                  <option key={connector.code} value={connector.code}>
-                    {connector.name} - ₹{connector.pricePerUnit}/unit
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Connectors Qty (nos) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={currentDoor.connectorQuantity || ''}
-                onChange={e => setCurrentDoor(prev => ({ ...prev, connectorQuantity: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-              />
-            </div>
-          </div>
-        </section>
+          </section>
 
         {/* Additional Components Section */}
         <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">4</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">3</span>
             Additional Components
           </h2>
           
@@ -4126,9 +4116,10 @@ export default function Home() {
                     value={component.quantity}
                     onChange={e => {
                       const updated = [...quotation.additionalComponents];
-                      updated[index].quantity = parseInt(e.target.value) || 1;
+                      updated[index].quantity = e.target.value === '' ? 1 : parseInt(e.target.value);
                       setQuotation(prev => ({ ...prev, additionalComponents: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4141,9 +4132,10 @@ export default function Home() {
                     value={component.price}
                     onChange={e => {
                       const updated = [...quotation.additionalComponents];
-                      updated[index].price = parseFloat(e.target.value) || 0;
+                      updated[index].price = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       setQuotation(prev => ({ ...prev, additionalComponents: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4157,9 +4149,10 @@ export default function Home() {
                     value={component.discount}
                     onChange={e => {
                       const updated = [...quotation.additionalComponents];
-                      updated[index].discount = parseFloat(e.target.value) || 0;
+                      updated[index].discount = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       setQuotation(prev => ({ ...prev, additionalComponents: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4195,7 +4188,7 @@ export default function Home() {
         {/* Optional Items Section */}
         <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">5</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">4</span>
             Optional Items
           </h2>
           
@@ -4224,9 +4217,10 @@ export default function Home() {
                     value={item.quantity}
                     onChange={e => {
                       const updated = [...quotation.optionalItems];
-                      updated[index].quantity = parseInt(e.target.value) || 1;
+                      updated[index].quantity = e.target.value === '' ? 1 : parseInt(e.target.value);
                       setQuotation(prev => ({ ...prev, optionalItems: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4239,9 +4233,10 @@ export default function Home() {
                     value={item.mrp}
                     onChange={e => {
                       const updated = [...quotation.optionalItems];
-                      updated[index].mrp = parseFloat(e.target.value) || 0;
+                      updated[index].mrp = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       setQuotation(prev => ({ ...prev, optionalItems: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4255,9 +4250,10 @@ export default function Home() {
                     value={item.discount}
                     onChange={e => {
                       const updated = [...quotation.optionalItems];
-                      updated[index].discount = parseFloat(e.target.value) || 0;
+                      updated[index].discount = e.target.value === '' ? 0 : parseFloat(e.target.value);
                       setQuotation(prev => ({ ...prev, optionalItems: updated }));
                     }}
+                    onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   />
                 </div>
@@ -4293,7 +4289,7 @@ export default function Home() {
         {/* Configuration Settings */}
         <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
           <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
+            <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">5</span>
             Configuration
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -4307,7 +4303,8 @@ export default function Home() {
                 max="100"
                 step="0.1"
                 value={quotation.gstPercentage}
-                onChange={e => setQuotation(prev => ({ ...prev, gstPercentage: parseFloat(e.target.value) || 0 }))}
+                onChange={e => setQuotation(prev => ({ ...prev, gstPercentage: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
+                onWheel={(e) => e.currentTarget.blur()}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               />
             </div>
@@ -4321,7 +4318,8 @@ export default function Home() {
                 max="100"
                 step="0.1"
                 value={quotation.globalDiscount}
-                onChange={e => setQuotation(prev => ({ ...prev, globalDiscount: parseFloat(e.target.value) || 0 }))}
+                onChange={e => setQuotation(prev => ({ ...prev, globalDiscount: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
+                onWheel={(e) => e.currentTarget.blur()}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
               />
             </div>
@@ -4332,7 +4330,7 @@ export default function Home() {
         {showReport && quotation.doors.length > 0 && (
           <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">7</span>
+              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">6</span>
               Cutting Schemes
             </h2>
             <div className="space-y-6">
@@ -4462,7 +4460,7 @@ export default function Home() {
         {showReport && quotation.doors.length > 0 && (
           <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">8</span>
+              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">7</span>
               Cost Summary
             </h2>
             <div className="bg-gray-50 rounded-lg p-6 border border-gray-300">
@@ -4603,7 +4601,7 @@ export default function Home() {
         {showReport && quotation.doors.length > 0 && (
           <section className="border border-gray-200 rounded-lg p-4 sm:p-6 bg-white">
             <h2 className="text-lg font-bold text-black mb-6 flex items-center">
-              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">9</span>
+              <span className="bg-black text-white rounded w-7 h-7 flex items-center justify-center mr-3 text-xs font-bold">8</span>
               Export Options
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">

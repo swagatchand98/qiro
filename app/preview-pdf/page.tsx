@@ -67,7 +67,6 @@ export default function PreviewPDFPage() {
     additionalComponents: [],
     optionalItems: [],
     gstPercentage: 18,
-    glassWastagePercentage: 10,
     globalDiscount: 0,
     doors: [
       {
@@ -207,7 +206,7 @@ export default function PreviewPDFPage() {
     setIsGenerating(true);
     try {
       const doorCalculations = sampleQuotation.doors.map(door =>
-        calculateDoorCosts(door, sampleQuotation.glassWastagePercentage)
+        calculateDoorCosts(door)
       );
       const costSummary = calculateCostSummary(sampleQuotation, doorCalculations);
       
@@ -224,7 +223,7 @@ export default function PreviewPDFPage() {
     setIsGenerating(true);
     try {
       const doorCalculations = sampleQuotation.doors.map(door =>
-        calculateDoorCosts(door, sampleQuotation.glassWastagePercentage)
+        calculateDoorCosts(door)
       );
       const costSummary = calculateCostSummary(sampleQuotation, doorCalculations);
       

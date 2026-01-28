@@ -80,37 +80,37 @@ export const glassTypes: GlassType[] = [
   {
     code: 'GL001',
     name: 'Clear Glass 5mm',
-    pricePerSqFt: 4.5, 
+    pricePerSqFt: 45.00, 
     thickness: 5,
   },
   {
     code: 'GL002',
     name: 'Tinted Glass 5mm',
-    pricePerSqFt: 5.5,
+    pricePerSqFt: 55.00,
     thickness: 5,
   },
   {
     code: 'GL003',
     name: 'Frosted Glass 5mm',
-    pricePerSqFt: 6.0,
+    pricePerSqFt: 60.00,
     thickness: 5,
   },
   {
     code: 'GL004',
     name: 'Clear Glass 8mm',
-    pricePerSqFt: 7.0,
+    pricePerSqFt: 70.00,
     thickness: 8,
   },
   {
     code: 'GL005',
     name: 'Toughened Glass 10mm',
-    pricePerSqFt: 9.0,
+    pricePerSqFt: 90.00,
     thickness: 10,
   },
   {
     code: 'GL006',
     name: 'Laminated Glass 6mm',
-    pricePerSqFt: 10.0,
+    pricePerSqFt: 100.00,
     thickness: 6,
   },
 ];
@@ -529,7 +529,6 @@ export const masterData: MasterData = {
     ]
   },
   defaultGST: 18,
-  defaultGlassWastage: 10,
   companyInfo: {
     companyName: 'QIRO Glass Solutions',
     address: 'Address Line 1, Address Line 2, City, State - PIN',

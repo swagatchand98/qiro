@@ -268,9 +268,8 @@ export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme =
 
 // Calculate glass area in square feet
 export const calculateGlassArea = (
-  door: DoorConfiguration,
-  wastagePercentage: number
-): { glassArea: number; glassAreaWithWastage: number } => {
+  door: DoorConfiguration
+): number => {
   const heightMm = convertToMm(door.height, door.measurementUnit);
   const widthMm = convertToMm(door.width, door.measurementUnit);
   const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
@@ -279,19 +278,13 @@ export const calculateGlassArea = (
   const glassHeightMm = heightMm - (2 * frameThickness);
   const glassWidthMm = widthMm - (2 * frameThickness);
   const glassAreaMm2 = glassHeightMm * glassWidthMm;
-  const glassAreaSqFt = glassAreaMm2 / 929.0304;
-  // Apply wastage percentage
-  const glassAreaWithWastage = glassAreaSqFt * (1 + wastagePercentage / 100);
-  return {
-    glassArea: parseFloat(glassAreaSqFt.toFixed(2)),
-    glassAreaWithWastage: parseFloat(glassAreaWithWastage.toFixed(2)),
-  };
+  const glassAreaSqFt = glassAreaMm2 / 92903.04;
+  return parseFloat(glassAreaSqFt.toFixed(2));
 };
 
 // Calculate costs for a single door with comprehensive auto-calculations
 export const calculateDoorCosts = (
-  door: DoorConfiguration,
-  wastagePercentage: number
+  door: DoorConfiguration
 ): DoorCalculation => {
   const heightMm = convertToMm(door.height, door.measurementUnit);
   const widthMm = convertToMm(door.width, door.measurementUnit);
@@ -319,12 +312,11 @@ export const calculateDoorCosts = (
   }
   
   // AUTO-CALCULATE: Glass area and cost
-  const { glassArea, glassAreaWithWastage } = calculateGlassArea(
-    { ...door, frameProfileCode: profileCode, height: door.height, width: door.width, measurementUnit: door.measurementUnit } as any,
-    wastagePercentage
+  const glassArea = calculateGlassArea(
+    { ...door, frameProfileCode: profileCode, height: door.height, width: door.width, measurementUnit: door.measurementUnit } as any
   );
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
-  const glassCost = glassAreaWithWastage * (glassType?.pricePerSqFt || 0) * door.quantity;
+  const glassCost = glassArea * (glassType?.pricePerSqFt || 0) * door.quantity;
   
   // AUTO-CALCULATE: Connectors required
   const connectorsRequired = door.connectorQuantity || calculateConnectorsRequired(
@@ -443,7 +435,6 @@ export const calculateDoorCosts = (
     
     // Glass
     glassArea, // in sq. ft
-    glassAreaWithWastage, // in sq. ft
     glassCost: parseFloat(glassCost.toFixed(2)),
     
     // Connectors

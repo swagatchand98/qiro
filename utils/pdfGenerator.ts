@@ -1465,6 +1465,40 @@ export const generateCuttingSchemaPDF = async (
   const margin = 20;
   let yPos = margin;
 
+  // Load custom font - Neue Haas Display
+  const loadCustomFont = async () => {
+    try {
+      // Load Medium variant for normal text (better rendering)
+      const response = await fetch('/font/NeueHaasDisplayMediu.ttf');
+      const fontBuffer = await response.arrayBuffer();
+      const fontBase64 = btoa(
+        new Uint8Array(fontBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      doc.addFileToVFS('NeueHaasDisplay-Medium.ttf', fontBase64);
+      doc.addFont('NeueHaasDisplay-Medium.ttf', 'NeueHaasDisplay', 'normal');
+      
+      // Load Bold variant
+      const responseBold = await fetch('/font/NeueHaasDisplayBold.ttf');
+      const fontBufferBold = await responseBold.arrayBuffer();
+      const fontBase64Bold = btoa(
+        new Uint8Array(fontBufferBold).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      doc.addFileToVFS('NeueHaasDisplay-Bold.ttf', fontBase64Bold);
+      doc.addFont('NeueHaasDisplay-Bold.ttf', 'NeueHaasDisplay', 'bold');
+      
+      // Set as default font
+      doc.setFont('NeueHaasDisplay', 'normal');
+      console.log('Custom font loaded successfully');
+    } catch (error) {
+      console.error('Failed to load custom font:', error);
+      // Fallback to helvetica
+      doc.setFont('helvetica', 'normal');
+    }
+  };
+
+  // Load custom font
+  await loadCustomFont();
+
   // Helper function to load and add logo
   const addLogoToHeader = async (): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -1505,11 +1539,11 @@ export const generateCuttingSchemaPDF = async (
     // Add logo if available
     if (logoDataUrl) {
       try {
-        // Logo centered, 40mm wide, maintaining aspect ratio
-        const logoWidth = 40;
-        const logoHeight = 12; // Adjust based on your logo's aspect ratio
+        // Logo centered, 80mm wide, maintaining aspect ratio
+        const logoWidth = 80;
+        const logoHeight = 80; // Adjust based on your logo's aspect ratio
         const logoX = (pageWidth - logoWidth) / 2;
-        const logoY = 6;
+        const logoY = -20;
         doc.addImage(logoDataUrl, 'JPEG', logoX, logoY, logoWidth, logoHeight);
       } catch (error) {
         console.error('Error adding logo to PDF:', error);
@@ -1529,28 +1563,46 @@ export const generateCuttingSchemaPDF = async (
 
     doc.setDrawColor(0, 0, 0);
     doc.setLineWidth(0.15);
-    doc.line(margin, 27, pageWidth - margin, 27);
+    doc.line(margin, 32, pageWidth - margin, 32);
     
-    return 40;
+    return 45;
   };
 
   yPos = addHeader(true);
 
   // Title
-  doc.setFontSize(14);
+  doc.setFontSize(10);
   doc.setFont('NeueHaasDisplay', 'bold');
   doc.setTextColor(0, 0, 0);
-  doc.text('CUTTING SCHEMA - STAFF ONLY', pageWidth / 2, yPos, { align: 'center' });
-  yPos += 10;
+  doc.text('CUTTING SCHEMA - STAFF ONLY', margin, yPos);
+  yPos += 8;
 
-  // Customer and Project Info
-  doc.setFontSize(9);
+  // Customer and Project Info - Clean Layout matching quotation PDF
   doc.setFont('NeueHaasDisplay', 'normal');
-  doc.text(`Customer: ${quotation.customerName}`, margin, yPos);
-  doc.text(`Date: ${formatDate(quotation.date)}`, pageWidth - margin - 60, yPos);
-  yPos += 5;
-  doc.text(`Project: ${quotation.projectName}`, margin, yPos);
-  doc.text(`ID: ${quotation.id}`, pageWidth - margin - 60, yPos);
+  doc.setFontSize(9);
+  
+  // Left column
+  doc.setFont('NeueHaasDisplay', 'bold');
+  doc.text('Customer:', margin, yPos);
+  doc.setFont('NeueHaasDisplay', 'normal');
+  doc.text(quotation.customerName, margin + 25, yPos);
+  
+  // Right column
+  doc.setFont('NeueHaasDisplay', 'bold');
+  doc.text('Date:', pageWidth - margin - 60, yPos);
+  doc.setFont('NeueHaasDisplay', 'normal');
+  doc.text(formatDate(quotation.date), pageWidth - margin - 25, yPos);
+  yPos += 6;
+  
+  doc.setFont('NeueHaasDisplay', 'bold');
+  doc.text('Project:', margin, yPos);
+  doc.setFont('NeueHaasDisplay', 'normal');
+  doc.text(quotation.projectName, margin + 25, yPos);
+  
+  doc.setFont('NeueHaasDisplay', 'bold');
+  doc.text('ID:', pageWidth - margin - 60, yPos);
+  doc.setFont('NeueHaasDisplay', 'normal');
+  doc.text(quotation.id, pageWidth - margin - 25, yPos);
   yPos += 12;
 
   // Group doors by profile combination (frame + handle)

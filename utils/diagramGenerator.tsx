@@ -49,6 +49,9 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
   const widthLabel = formatMeasurement(door.width, door.measurementUnit);
   const heightLabel = formatMeasurement(door.height, door.measurementUnit);
   
+  // Check if glass is selected
+  const hasGlass = door.glassTypeCode && door.glassTypeCode !== '';
+  
   // Render different content based on door type
   const renderDoorContent = () => {
     if (door.doorType === 'openable' && door.width > 1200) {
@@ -65,13 +68,21 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
         <>
           {/* Left Panel */}
           <rect x={offsetX} y={offsetY} width={panelWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={leftGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={leftGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={leftGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={leftGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Right Panel */}
           <rect x={offsetX + panelWidth} y={offsetY} width={panelWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={rightGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={rightGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={rightGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={rightGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Center Line */}
           <line x1={offsetX + panelWidth} y1={offsetY} x2={offsetX + panelWidth} y2={offsetY + scaledHeight} stroke="#654321" strokeWidth="2" />
@@ -88,8 +99,12 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
       return (
         <>
           <rect x={offsetX} y={offsetY} width={scaledWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={glassX} y={glassY} width={glassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={glassX + glassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={glassX} y={glassY} width={glassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={glassX + glassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Bottom Handle Bar */}
           <rect x={handleX - 30} y={handleY} width={60} height={10} fill="#FFD700" stroke="#DAA520" strokeWidth="1" rx="3" />
@@ -114,12 +129,18 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
           
           {/* Right Panel (back) */}
           <rect x={rightPanelX} y={offsetY} width={panelWidth} height={scaledHeight} fill="#A0826D" stroke="#654321" strokeWidth="2" opacity="0.7" />
-          <rect x={rightPanelX + scaledFrameThickness} y={glassY} width={panelWidth - 2 * scaledFrameThickness} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.5" />
+          {hasGlass && (
+            <rect x={rightPanelX + scaledFrameThickness} y={glassY} width={panelWidth - 2 * scaledFrameThickness} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.5" />
+          )}
           
           {/* Left Panel (front) */}
           <rect x={leftPanelX} y={offsetY} width={panelWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={leftPanelX + scaledFrameThickness} y={glassY} width={panelWidth - 2 * scaledFrameThickness} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={leftPanelX + panelWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={leftPanelX + scaledFrameThickness} y={glassY} width={panelWidth - 2 * scaledFrameThickness} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={leftPanelX + panelWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Handles */}
           <circle cx={leftHandleX} cy={handleY} r={6} fill="#FFD700" stroke="#DAA520" strokeWidth="1" />
@@ -142,13 +163,21 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
         <>
           {/* Left Panel */}
           <rect x={offsetX} y={offsetY} width={panelWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={leftGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={leftGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={leftGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={leftGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Right Panel */}
           <rect x={offsetX + panelWidth} y={offsetY} width={panelWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={rightGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={rightGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={rightGlassX} y={glassY} width={panelGlassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={rightGlassX + panelGlassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Center Fold Line */}
           <line x1={offsetX + panelWidth} y1={offsetY} x2={offsetX + panelWidth} y2={offsetY + scaledHeight} stroke="#654321" strokeWidth="2" strokeDasharray="5,5" />
@@ -182,8 +211,12 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
       return (
         <>
           <rect x={offsetX} y={offsetY} width={scaledWidth} height={scaledHeight} fill="#8B4513" stroke="#654321" strokeWidth="2" />
-          <rect x={glassX} y={glassY} width={glassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
-          <text x={glassX + glassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+          {hasGlass && (
+            <>
+              <rect x={glassX} y={glassY} width={glassWidth} height={glassHeight} fill="url(#glassPattern)" stroke="#4A90E2" strokeWidth="1" opacity="0.8" />
+              <text x={glassX + glassWidth / 2} y={glassY + glassHeight / 2} textAnchor="middle" className="text-xs" fill="#4A90E2">GLASS</text>
+            </>
+          )}
           
           {/* Handle */}
           {door.handlePosition !== 'none' && (
@@ -703,6 +736,9 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
   const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
   const slidingBundle = masterData.slidingBundles?.find(b => b.code === door.slidingSystemCode);
   
+  // Check if glass is selected
+  const hasGlass = door.glassTypeCode && door.glassTypeCode !== '';
+  
   const width = 700;
   const height = 850;
   const padding = 120;
@@ -1035,6 +1071,7 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
       </g>
       
       <!-- GLASS LABEL (Top Right) -->
+      ${hasGlass ? `
       <g>
         <line x1="${offsetX + scaledWidth - 15}" y1="${offsetY + scaledHeight / 3}" 
               x2="${offsetX + scaledWidth + 35}" y2="${offsetY + scaledHeight / 3 - 20}" 
@@ -1052,6 +1089,7 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
           ${glassType?.code || 'GL003'}
         </text>
       </g>
+      ` : ''}
       
       <!-- Handle callout (no visible handle bar, just label) -->
       ${door.hasHandle ? `

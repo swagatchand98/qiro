@@ -922,10 +922,10 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
     `;
   }
   
-  // Generate hinge callouts - with prominent dark spots
+  // Generate hinge callouts - with prominent dark spots (NOT for sliding doors)
   let hingesHTML = '';
   
-  if (hingeSide === 'top') {
+  if (door.doorType !== 'sliding' && hingeSide === 'top') {
     // Top hinges - draw horizontally along the top edge
     // Distribute evenly based on number of hinges
     const hingeCount = hingePositions.length || 2;
@@ -955,8 +955,8 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
         </g>
       `;
     }
-  } else {
-    // Left/Right hinges - draw vertically along the side
+  } else if (door.doorType !== 'sliding') {
+    // Left/Right hinges - draw vertically along the side (NOT for sliding doors)
     hingePositions.forEach((positionMm, index) => {
       const scaledY = offsetY + (positionMm * scale);
       if (scaledY >= offsetY && scaledY <= offsetY + scaledHeight) {
@@ -1186,17 +1186,21 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
         <text x="180" y="${height - 73}" font-size="9" font-family="Arial, sans-serif" fill="#666">${handleProfile?.name || 'None'}</text>
         <text x="420" y="${height - 73}" font-size="9" font-family="Arial, sans-serif" fill="#666">${handleProfile?.code || 'N/A'}</text>
         
+        ${door.doorType !== 'sliding' ? `
         <text x="45" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#333">Hinge:</text>
         <text x="180" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeProduct?.name || 'Standard'}</text>
         <text x="420" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeProduct?.code || door.hingeCode || 'N/A'}</text>
+        ` : ''}
         
-        <text x="45" y="${height - 43}" font-size="9" font-family="Arial, sans-serif" fill="#333">Quantity:</text>
-        <text x="180" y="${height - 43}" font-size="9" font-family="Arial, sans-serif" fill="#666">${door.quantity} Unit${door.quantity > 1 ? 's' : ''}</text>
-        <text x="420" y="${height - 43}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
+        <text x="45" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#333">Quantity:</text>
+        <text x="180" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${door.quantity} Unit${door.quantity > 1 ? 's' : ''}</text>
+        <text x="420" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
         
+        ${door.doorType !== 'sliding' ? `
         <text x="45" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#333">Hinge Position:</text>
         <text x="180" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeSide.toUpperCase()} | Count: ${hingePositions.length}</text>
         <text x="420" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
+        ` : ''}
       </g>
       
       <!-- Footer -->

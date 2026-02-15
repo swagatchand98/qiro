@@ -403,7 +403,8 @@ export default function Home() {
     else if (currentDoor.handlePosition === 'right') autoHingePosition = 'left';
     else if (currentDoor.handlePosition === 'bottom') autoHingePosition = 'top';
 
-    if (heightMm > 0 && (currentDoor.doorType === 'openable' || currentDoor.doorType === 'pin-hinge')) {
+    // Only calculate hinges for openable, air-hinge, and pin-hinge doors (NOT sliding)
+    if (heightMm > 0 && (currentDoor.doorType === 'openable' || currentDoor.doorType === 'air-hinge' || currentDoor.doorType === 'pin-hinge')) {
       // Auto-calculate hinge quantity based on height
       const calculatedHingeQty = calculateHingeQuantityByHeight(heightMm);
       // Calculate positions
@@ -418,6 +419,15 @@ export default function Home() {
           hingeQuantity: calculatedHingeQty,
           hingePositionMm: positions,
           hingePosition: autoHingePosition
+        }));
+      }
+    } else if (currentDoor.doorType === 'sliding') {
+      // Clear hinges for sliding doors
+      if (currentDoor.hingeQuantity !== 0 || currentDoor.hingePositionMm !== undefined) {
+        setCurrentDoor(prev => ({
+          ...prev,
+          hingeQuantity: 0,
+          hingePositionMm: undefined
         }));
       }
     }
@@ -3433,39 +3443,45 @@ export default function Home() {
                       <option value="none">None</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Hinge Position
-                    </label>
-                    <select
-                      value={currentDoor.hingePosition}
-                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingePosition: e.target.value as any }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                    >
-                      <option value="left">Left</option>
-                      <option value="right">Right</option>
-                      <option value="top">Top</option>
-                      <option value="none">None</option>
-                    </select>
-                  </div>
+                  {/* Only show Hinge Position for non-sliding doors */}
+                  {currentDoor.doorType !== 'sliding' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Hinge Position
+                      </label>
+                      <select
+                        value={currentDoor.hingePosition}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, hingePosition: e.target.value as any }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                      >
+                        <option value="left">Left</option>
+                        <option value="right">Right</option>
+                        <option value="top">Top</option>
+                        <option value="none">None</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Hinges
-                    </label>
-                    <input
-                      type="number"
-                      min="2"
-                      value={currentDoor.hingeQuantity || 2}
-                      onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, e.target.value === '' ? 2 : parseInt(e.target.value)) }))}
-                      onWheel={(e) => e.currentTarget.blur()}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
-                      placeholder="2"
-                    />
+                {/* Only show Hinges count for non-sliding doors */}
+                {currentDoor.doorType !== 'sliding' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Hinges
+                      </label>
+                      <input
+                        type="number"
+                        min="2"
+                        value={currentDoor.hingeQuantity || 2}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, e.target.value === '' ? 2 : parseInt(e.target.value)) }))}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                        placeholder="2"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 

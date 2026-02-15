@@ -125,7 +125,8 @@ export const calculateHingeConfig = (
   heightMm: number,
   doorType: string
 ): { hingeCount: number; hingePositions: number[] } => {
-  if (doorType !== 'openable' && doorType !== 'pin-hinge') {
+  // Only openable, air-hinge, and pin-hinge doors need hinges (not sliding)
+  if (doorType !== 'openable' && doorType !== 'air-hinge' && doorType !== 'pin-hinge') {
     return { hingeCount: 0, hingePositions: [] };
   }
 

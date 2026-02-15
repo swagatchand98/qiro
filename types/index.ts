@@ -43,6 +43,7 @@ export interface FrameProfile {
   height: number; // mm
   pricePerMm: number;
   imageUrl?: string;
+  colors?: string[]; // Available colors for this profile
   suggestedHandles?: string[]; // Handle profile codes
   suggestedGlassTypes?: string[]; // Glass type codes
   suggestedConnectors?: string[]; // Connector codes
@@ -53,6 +54,7 @@ export interface HandleProfile {
   name: string;
   pricePerMm: number;
   imageUrl?: string;
+  colors?: string[]; // Available colors for this handle
 }
 
 export interface GlassType {
@@ -88,6 +90,7 @@ export interface DoorConfiguration {
   // Door Type & Profile
   doorType: DoorType; // 'openable' | 'sliding' | 'air-hinge' | 'pin-hinge'
   profileCode: string; // Main profile/frame code
+  profileColor?: string; // Selected color for frame profile
   
   // Dimensions
   measurementUnit: MeasurementUnit;
@@ -99,6 +102,7 @@ export interface DoorConfiguration {
   // Handle Configuration
   hasHandle: boolean; // Yes/No
   handleProfileCode?: string; // Handle type (if hasHandle)
+  handleColor?: string; // Selected color for handle
   handlePosition: HandlePosition; // left/right/center/none
   handleOffset?: number; // mm from edge
   

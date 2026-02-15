@@ -1042,6 +1042,60 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
                             </div>
+                            <div className="md:col-span-2">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Available Colors</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Type color and press Enter (e.g., Black)"
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const input = e.currentTarget;
+                                      const colorValue = input.value.trim();
+                                      if (colorValue && !profile.colors?.includes(colorValue)) {
+                                        const newColors = [...(profile.colors || []), colorValue];
+                                        updateFrameProfile(index, { ...profile, colors: newColors });
+                                        input.value = '';
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={(e) => {
+                                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                    const colorValue = input.value.trim();
+                                    if (colorValue && !profile.colors?.includes(colorValue)) {
+                                      const newColors = [...(profile.colors || []), colorValue];
+                                      updateFrameProfile(index, { ...profile, colors: newColors });
+                                      input.value = '';
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              {profile.colors && profile.colors.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {profile.colors.map((color, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                      {color}
+                                      <button
+                                        onClick={() => {
+                                          const newColors = profile.colors?.filter((_, i) => i !== idx);
+                                          updateFrameProfile(index, { ...profile, colors: newColors?.length ? newColors : undefined });
+                                        }}
+                                        className="text-red-600 hover:text-red-800"
+                                      >
+                                        ✕
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
                               <input
@@ -1191,6 +1245,60 @@ export default function Home() {
                                 onChange={e => updateHandleProfile(index, { ...profile, pricePerMm: parseFloat(e.target.value) || 0 })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                               />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Available Colors</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Type color and press Enter (e.g., Black)"
+                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const input = e.currentTarget;
+                                      const colorValue = input.value.trim();
+                                      if (colorValue && !profile.colors?.includes(colorValue)) {
+                                        const newColors = [...(profile.colors || []), colorValue];
+                                        updateHandleProfile(index, { ...profile, colors: newColors });
+                                        input.value = '';
+                                      }
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={(e) => {
+                                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                    const colorValue = input.value.trim();
+                                    if (colorValue && !profile.colors?.includes(colorValue)) {
+                                      const newColors = [...(profile.colors || []), colorValue];
+                                      updateHandleProfile(index, { ...profile, colors: newColors });
+                                      input.value = '';
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              {profile.colors && profile.colors.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {profile.colors.map((color, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                      {color}
+                                      <button
+                                        onClick={() => {
+                                          const newColors = profile.colors?.filter((_, i) => i !== idx);
+                                          updateHandleProfile(index, { ...profile, colors: newColors?.length ? newColors : undefined });
+                                        }}
+                                        className="text-red-600 hover:text-red-800"
+                                      >
+                                        ✕
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
@@ -3378,6 +3486,28 @@ export default function Home() {
                   </select>
                 </div>
 
+                {/* Frame Profile Color Selection */}
+                {(() => {
+                  const selectedProfile = masterData.frameProfiles.find(fp => fp.code === (currentDoor.profileCode || currentDoor.frameProfileCode));
+                  return selectedProfile?.colors && selectedProfile.colors.length > 0 ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Frame Color *
+                      </label>
+                      <select
+                        value={currentDoor.profileColor || ''}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, profileColor: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                      >
+                        {!currentDoor.profileColor && <option value="">Select Color</option>}
+                        {selectedProfile.colors.map((color, idx) => (
+                          <option key={idx} value={color}>{color}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null;
+                })()}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Glass Type {filteredOptions.glassTypes.length < masterData.glassTypes.length && (
@@ -3415,7 +3545,15 @@ export default function Home() {
                   </label>
                   <select
                     value={currentDoor.handleProfileCode || ''}
-                    onChange={e => setCurrentDoor(prev => ({ ...prev, handleProfileCode: e.target.value || undefined }))}
+                    onChange={e => {
+                      const handleCode = e.target.value || undefined;
+                      const selectedHandle = masterData.handleProfiles.find(hp => hp.code === handleCode);
+                      setCurrentDoor(prev => ({ 
+                        ...prev, 
+                        handleProfileCode: handleCode,
+                        handleColor: selectedHandle?.colors?.[0] || undefined // Set first color as default
+                      }));
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   >
                     <option value="">None</option>
@@ -3426,6 +3564,28 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
+
+                {/* Handle Color Selection */}
+                {(() => {
+                  const selectedHandle = masterData.handleProfiles.find(hp => hp.code === currentDoor.handleProfileCode);
+                  return selectedHandle?.colors && selectedHandle.colors.length > 0 ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Handle Color *
+                      </label>
+                      <select
+                        value={currentDoor.handleColor || ''}
+                        onChange={e => setCurrentDoor(prev => ({ ...prev, handleColor: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                      >
+                        {!currentDoor.handleColor && <option value="">Select Color</option>}
+                        {selectedHandle.colors.map((color, idx) => (
+                          <option key={idx} value={color}>{color}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

@@ -545,7 +545,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
       costItems.push({
         item: 'Handle Profile',
         spec: `${handleProfile.name} (${handleProfile.code})`,
-        qty: `${calc.totalHandleLength?.toFixed(2) || 0}m`,
+        qty: `${calc.totalHandleLength?.toFixed(0) || 0}mm`,
         cost: calc.handleCost
       });
     }
@@ -584,7 +584,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
       costItems.push({
         item: 'Dividers',
         spec: `Profile + Connectors`,
-        qty: `${calc.dividerLength.toFixed(2)}m`,
+        qty: `${calc.dividerLength.toFixed(0)}mm`,
         cost: calc.dividerCost
       });
     }
@@ -605,7 +605,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
       costItems.push({
         item: 'Gasket',
         spec: door.gasketCode || 'Standard',
-        qty: `${calc.totalProfileLength.toFixed(2)}m`,
+        qty: `${calc.totalProfileLength.toFixed(0)}mm`,
         cost: calc.gasketCost
       });
     }

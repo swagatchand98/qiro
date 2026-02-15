@@ -12,8 +12,9 @@ import {
   DividerSettings,
   DividerConfig,
   PricingSettings,
+  MasterData,
 } from '../types';
-import { masterData } from '../data/masterData';
+import { masterData as defaultMasterData } from '../data/masterData';
 
 // Unit conversion
 export const mmToInches = (mm: number): number => mm / 25.4;
@@ -106,7 +107,7 @@ export const autoSelectSlidingBundle = (
   const totalWeight = totalWeightPerDoor * doorCount;
   
   // Find suitable bundles sorted by weight capacity
-  const suitableBundles = masterData.slidingBundles
+  const suitableBundles = defaultMasterData.slidingBundles
     .filter(bundle => bundle.maxDoorWeight >= totalWeight)
     .sort((a, b) => a.maxDoorWeight - b.maxDoorWeight);
   
@@ -184,25 +185,17 @@ export const calculateConnectorsRequired = (
 };
 
 // AUTO-CALCULATE: Total profile length
+// Frame = 2 vertical sides
+// Total frame length = (height × 2)
 export const calculateProfileLength = (
   widthMm: number,
   heightMm: number,
   doorType: string,
   frameThickness: number = 25
 ): number => {
-  // Basic perimeter
-  const perimeter = 2 * (widthMm + heightMm);
-  
-  // Additional reinforcement based on door type
-  let additionalLength = 0;
-  
-  if (doorType === 'sliding') {
-    additionalLength = widthMm * 0.5; // 50% extra for tracks
-  } else if (doorType === 'air-hinge' || doorType === 'pin-hinge') {
-    additionalLength = widthMm * 0.3; // 30% extra for reinforcement
-  }
-
-  return perimeter + additionalLength;
+  // 2 vertical sides only (no top, no bottom)
+  const totalLength = heightMm * 2;
+  return totalLength;
 };
 
 // AUTO-CALCULATE: Divider positions and length
@@ -220,39 +213,27 @@ export const calculateDividerLength = (
 };
 
 // Calculate cutting scheme for a door
-export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme => {
+// Frame: 2 vertical pieces only (height × 2), no horizontal pieces
+// Handle: same as door height
+export const calculateCuttingScheme = (door: DoorConfiguration, masterData?: MasterData): CuttingScheme => {
   const heightMm = convertToMm(door.height, door.measurementUnit);
-  const widthMm = convertToMm(door.width, door.measurementUnit);
   
-  const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
-  const frameThickness = frameProfile?.width || 25;
-  
-  // Calculate frame pieces
-  // Vertical pieces: 2 pieces of full height
+  // Vertical pieces: 2 pieces of full height (only frame pieces)
   const verticalLength = Math.round(heightMm);
   
-  // Horizontal pieces: 2 pieces of width minus frame thickness on both sides
-  const horizontalLength = Math.round(widthMm - (2 * frameThickness));
-  
-  // For single door: 2 vertical + 2 horizontal pieces
+  // No horizontal frame pieces (no top, no bottom)
   const frameVerticalPieces = [verticalLength, verticalLength];
-  const frameHorizontalPieces = [horizontalLength, horizontalLength];
+  const frameHorizontalPieces: number[] = [];
   
-  // Additional allowance pieces (for reinforcement or extra support)
-  const allowancePiece = Math.round(widthMm * 0.3); // 30% of width for extra support
-  frameHorizontalPieces.push(allowancePiece);
-  
-  const totalFrameLength = 
-    frameVerticalPieces.reduce((sum, l) => sum + l, 0) +
-    frameHorizontalPieces.reduce((sum, l) => sum + l, 0);
+  const totalFrameLength = frameVerticalPieces.reduce((sum, l) => sum + l, 0);
   
   // Calculate handle pieces if handle is present
   let handlePieces: number[] = [];
   let totalHandleLength = 0;
   
   if (door.handleProfileCode && door.handlePosition !== 'none') {
-    // Handle runs vertically along the door height
-    const handleLength = Math.round(heightMm - 100); // 100mm less for clearance
+    // Handle length = full door height
+    const handleLength = Math.round(heightMm);
     handlePieces = [handleLength];
     totalHandleLength = handleLength;
   }
@@ -267,15 +248,21 @@ export const calculateCuttingScheme = (door: DoorConfiguration): CuttingScheme =
 };
 
 // Calculate glass area in square feet
+// Frame is only 2 vertical sides, so:
+// Glass height = full door height (no top/bottom frame)
+// Glass width = door width - 2 frame thicknesses (left + right vertical frames)
 export const calculateGlassArea = (
-  door: DoorConfiguration
+  door: DoorConfiguration,
+  masterData?: MasterData
 ): number => {
+  const md = masterData || defaultMasterData;
   const heightMm = convertToMm(door.height, door.measurementUnit);
   const widthMm = convertToMm(door.width, door.measurementUnit);
-  const frameProfile = masterData.frameProfiles.find(f => f.code === door.frameProfileCode);
+  const frameProfile = md.frameProfiles.find(f => f.code === door.frameProfileCode);
   const frameThickness = frameProfile?.width || 25;
-  // Glass area = door area minus frame area
-  const glassHeightMm = heightMm - (2 * frameThickness);
+  // Glass height: full height (no top/bottom frame)
+  const glassHeightMm = heightMm;
+  // Glass width: subtract left + right vertical frames
   const glassWidthMm = widthMm - (2 * frameThickness);
   const glassAreaMm2 = glassHeightMm * glassWidthMm;
   const glassAreaSqFt = glassAreaMm2 / 92903.04;
@@ -284,14 +271,16 @@ export const calculateGlassArea = (
 
 // Calculate costs for a single door with comprehensive auto-calculations
 export const calculateDoorCosts = (
-  door: DoorConfiguration
+  door: DoorConfiguration,
+  masterData?: MasterData
 ): DoorCalculation => {
+  const md = masterData || defaultMasterData;
   const heightMm = convertToMm(door.height, door.measurementUnit);
   const widthMm = convertToMm(door.width, door.measurementUnit);
   
   // Get profile from new system or legacy
   const profileCode = door.profileCode || door.frameProfileCode || '';
-  const frameProfile = masterData.frameProfiles.find(f => f.code === profileCode);
+  const frameProfile = md.frameProfiles.find(f => f.code === profileCode);
   const frameThickness = frameProfile?.width || 25;
   
   // AUTO-CALCULATE: Total profile length
@@ -302,20 +291,22 @@ export const calculateDoorCosts = (
   const frameCost = totalProfileLengthMm * framePricePerMm * door.quantity;
   
   // AUTO-CALCULATE: Handle length and cost
+  // Handle length = full door height
   let totalHandleLengthMm: number | undefined;
   let handleCost = 0;
   if (door.hasHandle && door.handleProfileCode) {
-    totalHandleLengthMm = heightMm - 100; // Handle runs vertically, 100mm less for clearance
-    const handleProfile = masterData.handleProfiles.find(h => h.code === door.handleProfileCode);
+    totalHandleLengthMm = heightMm; // Handle = full door height
+    const handleProfile = md.handleProfiles.find(h => h.code === door.handleProfileCode);
     const handlePricePerMm = handleProfile?.pricePerMm || 0;
     handleCost = totalHandleLengthMm * handlePricePerMm * door.quantity;
   }
   
   // AUTO-CALCULATE: Glass area and cost
   const glassArea = calculateGlassArea(
-    { ...door, frameProfileCode: profileCode, height: door.height, width: door.width, measurementUnit: door.measurementUnit } as any
+    { ...door, frameProfileCode: profileCode, height: door.height, width: door.width, measurementUnit: door.measurementUnit } as any,
+    md
   );
-  const glassType = masterData.glassTypes.find(g => g.code === door.glassTypeCode);
+  const glassType = md.glassTypes.find(g => g.code === door.glassTypeCode);
   const glassCost = glassArea * (glassType?.pricePerSqFt || 0) * door.quantity;
   
   // AUTO-CALCULATE: Connectors required
@@ -324,7 +315,7 @@ export const calculateDoorCosts = (
     door.hasDividers,
     door.dividerConfig
   );
-  const connector = masterData.connectorTypes.find(c => c.code === door.connectorCode);
+  const connector = md.connectorTypes.find(c => c.code === door.connectorCode);
   const connectorCost = connectorsRequired * (connector?.pricePerUnit || 0) * door.quantity;
   
   // AUTO-CALCULATE: Hinge count and positions (for openable/pin-hinge)
@@ -336,7 +327,7 @@ export const calculateDoorCosts = (
   let hingeCost = 0;
   if (hingeCount > 0 && door.hingeCode) {
     // Find hinge in products or use default price
-    const hingeProduct = masterData.products?.find(p => p.code === door.hingeCode && p.productType === 'hinge');
+    const hingeProduct = md.products?.find(p => p.code === door.hingeCode && p.productType === 'hinge');
     const hingePricePerUnit = hingeProduct?.pricePerUnit || hingeProduct?.sellingPrice || 50;
     hingeCost = hingeCount * hingePricePerUnit * door.quantity;
   }
@@ -348,9 +339,9 @@ export const calculateDoorCosts = (
   
   if (door.hasDividers && door.dividerConfig) {
     const dividerLengthMm = calculateDividerLength(widthMm, heightMm, door.dividerConfig);
-    dividerLength = dividerLengthMm / 1000; // meters for display
+    dividerLength = dividerLengthMm; // mm for display
     
-    const dividerProfile = masterData.products?.find(p => p.code === door.dividerProfileCode && p.productType === 'divider-profile');
+    const dividerProfile = md.products?.find(p => p.code === door.dividerProfileCode && p.productType === 'divider-profile');
     const dividerPricePerMm = dividerProfile?.pricePerMm || dividerProfile?.sellingPrice || 0;
     dividerCost = dividerLengthMm * dividerPricePerMm * door.quantity;
     
@@ -359,7 +350,7 @@ export const calculateDoorCosts = (
     const verticalCount = door.dividerConfig.vertical?.length || 0;
     dividerConnectorsRequired = (horizontalCount + verticalCount) * 4; // 4 connectors per divider
     
-    const dividerConnector = masterData.products?.find(p => p.code === door.dividerConnectorCode && p.productType === 'divider-connector');
+    const dividerConnector = md.products?.find(p => p.code === door.dividerConnectorCode && p.productType === 'divider-connector');
     const dividerConnectorPrice = dividerConnector?.pricePerUnit || dividerConnector?.sellingPrice || 0;
     dividerCost += dividerConnectorsRequired * dividerConnectorPrice * door.quantity;
   }
@@ -367,7 +358,7 @@ export const calculateDoorCosts = (
   // AUTO-CALCULATE: Gasket cost
   let gasketCost = 0;
   if (door.gasketCode) {
-    const gasketProduct = masterData.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
+    const gasketProduct = md.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
     const gasketPricePerMm = gasketProduct?.pricePerMm || gasketProduct?.sellingPrice || 0;
     const gasketLengthMm = totalProfileLengthMm; // Gasket runs along entire perimeter
     gasketCost = gasketLengthMm * gasketPricePerMm * door.quantity;
@@ -376,7 +367,7 @@ export const calculateDoorCosts = (
   // AUTO-CALCULATE: Lock cost
   let lockCost = 0;
   if (door.lockCode) {
-    const lockProduct = masterData.products?.find(p => p.code === door.lockCode && p.productType === 'lock');
+    const lockProduct = md.products?.find(p => p.code === door.lockCode && p.productType === 'lock');
     const lockPricePerUnit = lockProduct?.pricePerUnit || lockProduct?.sellingPrice || 0;
     lockCost = lockPricePerUnit * door.quantity; // 1 lock per door
   }
@@ -385,7 +376,7 @@ export const calculateDoorCosts = (
   let slidingSystemCost = 0;
   if (door.doorType === 'sliding' && door.slidingSystemCode) {
     // First check in sliding bundles
-    const slidingBundle = masterData.slidingBundles?.find(b => b.code === door.slidingSystemCode);
+    const slidingBundle = md.slidingBundles?.find(b => b.code === door.slidingSystemCode);
     if (slidingBundle) {
       // For bundles, use pricePerDoor if available, otherwise use sellingPrice as fixed price per door
       if (slidingBundle.pricePerUnit) {
@@ -398,14 +389,14 @@ export const calculateDoorCosts = (
       }
     } else {
       // Fallback to old products for backward compatibility
-      const slidingSystem = masterData.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
+      const slidingSystem = md.products?.find(p => p.code === door.slidingSystemCode && p.productType === 'sliding-system');
       const slidingPricePerMm = slidingSystem?.pricePerMm || slidingSystem?.sellingPrice || 0;
       slidingSystemCost = widthMm * slidingPricePerMm * door.quantity;
     }
   }
   
   // Calculate cutting scheme (for reference)
-  const cuttingScheme = calculateCuttingScheme({ ...door, frameProfileCode: profileCode } as any);
+  const cuttingScheme = calculateCuttingScheme({ ...door, frameProfileCode: profileCode } as any, md);
   
   // AUTO-CALCULATE: Total selling price per unit
   const totalSellingPrice = 
@@ -425,12 +416,12 @@ export const calculateDoorCosts = (
   return {
     doorId: door.id,
     
-    // Profile/Frame
-    totalProfileLength: parseFloat((totalProfileLengthMm / 1000).toFixed(3)),
+    // Profile/Frame (in mm)
+    totalProfileLength: parseFloat(totalProfileLengthMm.toFixed(2)),
     frameCost: parseFloat(frameCost.toFixed(2)),
     
-    // Handle
-    totalHandleLength: totalHandleLengthMm ? parseFloat((totalHandleLengthMm / 1000).toFixed(3)) : undefined,
+    // Handle (in mm)
+    totalHandleLength: totalHandleLengthMm ? parseFloat(totalHandleLengthMm.toFixed(2)) : undefined,
     handleCost: parseFloat(handleCost.toFixed(2)),
     
     // Glass
@@ -488,7 +479,7 @@ export const calculateCostSummary = (
   doorCalculations: DoorCalculation[],
   pricingSettings?: { makingChargeType: 'fixed' | 'percentage'; makingChargeValue: number; defaultDiscount: number; taxRates: { gst: number; cgst?: number; sgst?: number } }
 ): CostSummary => {
-  const pricing = pricingSettings || masterData.pricingSettings;
+  const pricing = pricingSettings || defaultMasterData.pricingSettings;
   
   // Component-wise breakdown from door calculations
   const totalProfileCost = doorCalculations.reduce((sum, calc) => sum + calc.frameCost, 0);

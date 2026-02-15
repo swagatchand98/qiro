@@ -147,11 +147,11 @@ export interface DoorCalculation {
   doorId: string;
   
   // Profile/Frame Calculations
-  totalProfileLength: number; // meters
+  totalProfileLength: number; // mm
   frameCost: number;
   
   // Handle Calculations
-  totalHandleLength?: number; // meters
+  totalHandleLength?: number; // mm
   handleCost: number;
   
   // Glass Calculations
@@ -168,7 +168,7 @@ export interface DoorCalculation {
   hingeCost: number;
   
   // Divider Calculations
-  dividerLength?: number; // meters
+  dividerLength?: number; // mm
   dividerConnectorsRequired?: number;
   dividerCost: number;
   

@@ -217,6 +217,24 @@ export default function Home() {
     localStorage.setItem('qiro_master_data', JSON.stringify(masterData));
   }, [masterData]);
 
+  // Sync currentDoor profile codes when masterData changes
+  useEffect(() => {
+    setCurrentDoor(prev => {
+      const needsUpdate = 
+        (prev.profileCode && !masterData.frameProfiles.find(p => p.code === prev.profileCode)) ||
+        (prev.handleProfileCode && !masterData.handleProfiles.find(p => p.code === prev.handleProfileCode));
+      
+      if (needsUpdate) {
+        return {
+          ...prev,
+          profileCode: masterData.frameProfiles[0]?.code || prev.profileCode,
+          handleProfileCode: masterData.handleProfiles[0]?.code || prev.handleProfileCode,
+        };
+      }
+      return prev;
+    });
+  }, [masterData]);
+
   const [quotation, setQuotation] = useState<QuotationData>({
     id: uuidv4(),
     // Legacy fields
@@ -330,9 +348,9 @@ export default function Home() {
   // Calculate door costs
   const doorCalculations = useMemo<DoorCalculation[]>(() => {
     return quotation.doors.map(door =>
-      calculateDoorCosts(door)
+      calculateDoorCosts(door, masterData)
     );
-  }, [quotation.doors]);
+  }, [quotation.doors, masterData]);
 
   // Calculate cost summary
   const costSummary = useMemo<CostSummary>(() => {
@@ -3793,7 +3811,9 @@ export default function Home() {
             </button>
 
               {/* Comprehensive Auto-Calculated Preview */}
-              {currentDoor.width > 0 && currentDoor.height > 0 && (
+              {currentDoor.width > 0 && currentDoor.height > 0 && (() => {
+                const currentCalc = calculateDoorCosts(currentDoor, masterData);
+                return (
                 <div className="bg-gradient-to-r from-green-50 to-blue-50 p-5 rounded-lg border-2 border-green-300">
                   <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
                     <span className="bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center mr-2 text-xs">✓</span>
@@ -3805,10 +3825,7 @@ export default function Home() {
                     <div className="bg-white p-3 rounded shadow-sm">
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Total Profile Length</label>
                       <div className="text-lg font-bold text-gray-900">
-                        {(() => {
-                          const calc = calculateDoorCosts(currentDoor);
-                          return calc.totalProfileLength.toFixed(2);
-                        })()}m
+                        {currentCalc.totalProfileLength.toFixed(0)}mm
                       </div>
                     </div>
 
@@ -3817,7 +3834,7 @@ export default function Home() {
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Connectors Required</label>
                       <div className="text-lg font-bold text-gray-900">
                         {(() => {
-                          const calc = calculateDoorCosts(currentDoor);
+                          const calc = currentCalc;
                           return calc.connectorsRequired;
                         })()} units
                       </div>
@@ -3829,7 +3846,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Count</label>
                         <div className="text-lg font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor);
+                            const calc = currentCalc;
                             return calc.hingeCount || 0;
                           })()} units
                         </div>
@@ -3842,7 +3859,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Hinge Positions (mm from top)</label>
                         <div className="text-sm font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor);
+                            const calc = currentCalc;
                             return (calc.hingePositions || []).join('mm, ') + 'mm';
                           })()}
                         </div>
@@ -3855,9 +3872,9 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Handle Length</label>
                         <div className="text-lg font-bold text-gray-900">
                           {(() => {
-                            const calc = calculateDoorCosts(currentDoor);
-                            return (calc.totalHandleLength || 0).toFixed(2);
-                          })()}m
+                            const calc = currentCalc;
+                            return (calc.totalHandleLength || 0).toFixed(0);
+                          })()}mm
                         </div>
                       </div>
                     )}
@@ -3869,16 +3886,16 @@ export default function Home() {
                           <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Length</label>
                           <div className="text-lg font-bold text-gray-900">
                             {(() => {
-                              const calc = calculateDoorCosts(currentDoor);
-                              return (calc.dividerLength || 0).toFixed(2);
-                            })()}m
+                              const calc = currentCalc;
+                              return (calc.dividerLength || 0).toFixed(0);
+                            })()}mm
                           </div>
                         </div>
                         <div className="bg-white p-3 rounded shadow-sm">
                           <label className="block text-xs font-semibold text-gray-600 mb-1">Divider Connectors</label>
                           <div className="text-lg font-bold text-gray-900">
                             {(() => {
-                              const calc = calculateDoorCosts(currentDoor);
+                              const calc = currentCalc;
                               return calc.dividerConnectorsRequired || 0;
                             })()} units
                           </div>
@@ -3891,7 +3908,7 @@ export default function Home() {
                       <label className="block text-xs font-semibold text-gray-600 mb-1">Glass Area</label>
                       <div className="text-lg font-bold text-gray-900">
                         {(() => {
-                          const calc = calculateDoorCosts(currentDoor);
+                          const calc = currentCalc;
                           return calc.glassArea.toFixed(2);
                         })()} sqft
                       </div>
@@ -3905,7 +3922,7 @@ export default function Home() {
                           <span className="text-gray-600">Frame:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor);
+                              const calc = currentCalc;
                               return calc.frameCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3915,7 +3932,7 @@ export default function Home() {
                             <span className="text-gray-600">Handle:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.handleCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3925,7 +3942,7 @@ export default function Home() {
                           <span className="text-gray-600">Glass:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor);
+                              const calc = currentCalc;
                               return calc.glassCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3934,7 +3951,7 @@ export default function Home() {
                           <span className="text-gray-600">Connectors:</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
-                              const calc = calculateDoorCosts(currentDoor);
+                              const calc = currentCalc;
                               return calc.connectorCost / currentDoor.quantity;
                             })())}
                           </span>
@@ -3944,7 +3961,7 @@ export default function Home() {
                             <span className="text-gray-600">Hinges:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.hingeCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3955,7 +3972,7 @@ export default function Home() {
                             <span className="text-gray-600">Dividers:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.dividerCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3966,7 +3983,7 @@ export default function Home() {
                             <span className="text-gray-600">Gasket:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.gasketCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3977,7 +3994,7 @@ export default function Home() {
                             <span className="text-gray-600">Lock:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.lockCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -3988,7 +4005,7 @@ export default function Home() {
                             <span className="text-gray-600">Sliding System:</span>
                             <span className="font-bold text-gray-900 ml-1">
                               {formatCurrency((() => {
-                                const calc = calculateDoorCosts(currentDoor);
+                                const calc = currentCalc;
                                 return calc.slidingSystemCost / currentDoor.quantity;
                               })())}
                             </span>
@@ -4002,7 +4019,7 @@ export default function Home() {
                       <label className="block text-sm font-bold text-amber-900 mb-1">Total Selling Price (Per Unit)</label>
                       <div className="text-2xl font-black text-amber-900">
                         {formatCurrency((() => {
-                          const calc = calculateDoorCosts(currentDoor);
+                          const calc = currentCalc;
                           return calc.totalSellingPrice;
                         })())}
                       </div>
@@ -4013,14 +4030,15 @@ export default function Home() {
                       <label className="block text-sm font-bold text-green-900 mb-1">Total Order Value (×{currentDoor.quantity})</label>
                       <div className="text-2xl font-black text-green-900">
                         {formatCurrency((() => {
-                          const calc = calculateDoorCosts(currentDoor);
+                          const calc = currentCalc;
                           return calc.totalOrderValue;
                         })())}
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Door Preview Diagrams */}

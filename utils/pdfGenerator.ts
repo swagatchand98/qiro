@@ -4,8 +4,9 @@ import {
   DoorConfiguration,
   DoorCalculation,
   CostSummary,
+  MasterData,
 } from '../types';
-import { masterData } from '../data/masterData';
+import { masterData as defaultMasterData } from '../data/masterData';
 import {
   formatCurrencyForPDF,
   formatDate,
@@ -98,8 +99,10 @@ export const generateQuotationId = (customerName: string, date: string): string 
 export const generateQuotationPDF = async (
   quotation: QuotationData,
   doorCalculations: DoorCalculation[],
-  costSummary: CostSummary
+  costSummary: CostSummary,
+  md?: MasterData
 ): Promise<void> => {
+  const masterData = md || defaultMasterData;
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -690,7 +693,7 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
       console.log('PDF Hinge positions (calculated):', doorWithHinges.hingePositionMm);
       console.log('PDF Hinge quantity:', door.hingeQuantity);
       
-      const elevationSVG = generatePremiumElevationSVG(doorWithHinges);
+      const elevationSVG = generatePremiumElevationSVG(doorWithHinges, masterData);
       
       // Diagram dimensions - centered on page
       const diagramWidth = 90;
@@ -1459,8 +1462,10 @@ doc.setFont('NeueHaasDisplay', 'normal');  // Only show final calculation stages
 export const generateCuttingSchemaPDF = async (
   quotation: QuotationData,
   doorCalculations: DoorCalculation[],
-  costSummary: CostSummary
+  costSummary: CostSummary,
+  md?: MasterData
 ): Promise<void> => {
+  const masterData = md || defaultMasterData;
   const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();

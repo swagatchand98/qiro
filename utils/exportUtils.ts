@@ -4,16 +4,19 @@ import {
   QuotationData,
   DoorCalculation,
   CostSummary,
+  MasterData,
 } from '../types';
-import { masterData } from '../data/masterData';
+import { masterData as defaultMasterData } from '../data/masterData';
 import { formatCurrency, formatDate } from './calculations';
 
 // Export to Excel
 export const exportToExcel = (
   quotation: QuotationData,
   doorCalculations: DoorCalculation[],
-  costSummary: CostSummary
+  costSummary: CostSummary,
+  md?: MasterData
 ): void => {
+  const masterData = md || defaultMasterData;
   const workbook = XLSX.utils.book_new();
   
   // Sheet 1: Quotation Summary
@@ -149,8 +152,10 @@ export const exportToExcel = (
 export const exportToText = (
   quotation: QuotationData,
   doorCalculations: DoorCalculation[],
-  costSummary: CostSummary
+  costSummary: CostSummary,
+  md?: MasterData
 ): void => {
+  const masterData = md || defaultMasterData;
   let text = '';
   
   // Header

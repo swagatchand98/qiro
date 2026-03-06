@@ -311,13 +311,49 @@ export const calculateDoorCosts = (
   const glassCost = glassArea * (glassType?.pricePerSqFt || 0) * door.quantity;
   
   // AUTO-CALCULATE: Connectors required
-  const connectorsRequired = door.connectorQuantity || calculateConnectorsRequired(
-    door.doorType,
-    door.hasDividers,
-    door.dividerConfig
-  );
-  const connector = md.connectorTypes.find(c => c.code === door.connectorCode);
-  const connectorCost = connectorsRequired * (connector?.pricePerUnit || 0) * door.quantity;
+  // If user explicitly set quantity to 0, respect that (no connectors)
+  // If user set a quantity > 0, use that
+  // If connectorQuantity is null/undefined (not set), auto-calculate
+  let connectorsRequired: number;
+  if (door.connectorQuantity != null) {
+    // User explicitly set a value (including 0) — respect it
+    connectorsRequired = door.connectorQuantity;
+  } else {
+    // Not set — auto-calculate
+    connectorsRequired = calculateConnectorsRequired(
+      door.doorType,
+      door.hasDividers,
+      door.dividerConfig
+    );
+  }
+  // Look up connector price — match by code from connectorTypes, then products
+  const connectorCode = (door.connectorCode || '').trim();
+  let connectorPricePerUnit = 0;
+  let resolvedConnectorCode = connectorCode;
+  if (connectorCode) {
+    // Primary: look in connectorTypes by exact code match
+    let connector = md.connectorTypes.find(c => c.code === connectorCode);
+    
+    // If not found, the door may have a stale code from defaults — use first available connector
+    if (!connector && md.connectorTypes.length > 0) {
+      connector = md.connectorTypes[0];
+      resolvedConnectorCode = connector.code;
+    }
+    
+    if (connector) {
+      connectorPricePerUnit = connector.pricePerUnit || 0;
+    } else {
+      // Last resort: look in products array
+      const connectorProduct = md.products?.find(p => p.code === connectorCode && p.productType === 'connector');
+      connectorPricePerUnit = connectorProduct?.pricePerUnit || connectorProduct?.sellingPrice || 0;
+    }
+  } else if (md.connectorTypes.length > 0) {
+    // No connector code set at all — use first available
+    const firstConnector = md.connectorTypes[0];
+    connectorPricePerUnit = firstConnector.pricePerUnit || 0;
+    resolvedConnectorCode = firstConnector.code;
+  }
+  const connectorCost = connectorsRequired * connectorPricePerUnit * door.quantity;
   
   // AUTO-CALCULATE: Hinge count and positions (for openable/pin-hinge)
   const hingeConfig = calculateHingeConfig(heightMm, door.doorType);
@@ -343,7 +379,8 @@ export const calculateDoorCosts = (
     dividerLength = dividerLengthMm; // mm for display
     
     const dividerProfile = md.products?.find(p => p.code === door.dividerProfileCode && p.productType === 'divider-profile');
-    const dividerPricePerMm = dividerProfile?.pricePerMm || dividerProfile?.sellingPrice || 0;
+    // Only use pricePerMm — sellingPrice is a total price, NOT per-mm
+    const dividerPricePerMm = dividerProfile?.pricePerMm || 0;
     dividerCost = dividerLengthMm * dividerPricePerMm * door.quantity;
     
     // Divider connectors
@@ -359,16 +396,32 @@ export const calculateDoorCosts = (
   // AUTO-CALCULATE: Gasket cost
   let gasketCost = 0;
   if (door.gasketCode) {
-    const gasketProduct = md.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
-    const gasketPricePerMm = gasketProduct?.pricePerMm || gasketProduct?.sellingPrice || 0;
+    const allProducts = md.products || [];
+    // Try exact match first
+    let gasketProduct = allProducts.find(p => p.code === door.gasketCode && p.productType === 'gasket');
+    // If not found by code+type, try by code only (in case productType wasn't set)
+    if (!gasketProduct) {
+      gasketProduct = allProducts.find(p => p.code === door.gasketCode);
+    }
+    // Use pricePerMm if available; if only sellingPrice exists, treat it as per-unit cost (not per-mm)
+    const gasketPricePerMm = gasketProduct?.pricePerMm || 0;
     const gasketLengthMm = totalProfileLengthMm; // Gasket runs along entire perimeter
-    gasketCost = gasketLengthMm * gasketPricePerMm * door.quantity;
+    if (gasketPricePerMm > 0) {
+      gasketCost = gasketLengthMm * gasketPricePerMm * door.quantity;
+    } else if (gasketProduct?.sellingPrice) {
+      // sellingPrice is per-unit, not per-mm — charge per door
+      gasketCost = gasketProduct.sellingPrice * door.quantity;
+    }
   }
   
   // AUTO-CALCULATE: Lock cost
   let lockCost = 0;
   if (door.lockCode) {
-    const lockProduct = md.products?.find(p => p.code === door.lockCode && p.productType === 'lock');
+    const allProducts = md.products || [];
+    let lockProduct = allProducts.find(p => p.code === door.lockCode && p.productType === 'lock');
+    if (!lockProduct) {
+      lockProduct = allProducts.find(p => p.code === door.lockCode);
+    }
     const lockPricePerUnit = lockProduct?.pricePerUnit || lockProduct?.sellingPrice || 0;
     lockCost = lockPricePerUnit * door.quantity; // 1 lock per door
   }

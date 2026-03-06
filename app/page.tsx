@@ -71,7 +71,7 @@ function calculateHingePositions(heightMm: number, hingeQuantity: number): numbe
 export default function Home() {
   // Settings sidebar state
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'company-info' | 'defaults' | 'validation' | 'hinges'>('frames');
+  const [activeTab, setActiveTab] = useState<'frames' | 'handles' | 'glass' | 'connectors' | 'clients' | 'jobs' | 'sliding-bundles' | 'company-info' | 'defaults' | 'validation' | 'hinges' | 'products'>('frames');
   const [showReport, setShowReport] = useState(false);
   
   // Password protection state
@@ -95,6 +95,9 @@ export default function Home() {
   // Sliding bundle management state
   const [editingSlidingBundle, setEditingSlidingBundle] = useState<SlidingBundle | null>(null);
   const [isAddingSlidingBundle, setIsAddingSlidingBundle] = useState(false);
+  
+  // Door editing state - null means adding new, string means editing existing door by id
+  const [editingDoorId, setEditingDoorId] = useState<string | null>(null);
   
   // Firestore sync state
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
@@ -217,21 +220,53 @@ export default function Home() {
     localStorage.setItem('qiro_master_data', JSON.stringify(masterData));
   }, [masterData]);
 
-  // Sync currentDoor profile codes when masterData changes
+  // Sync currentDoor profile/connector/glass codes when masterData changes
   useEffect(() => {
     setCurrentDoor(prev => {
-      const needsUpdate = 
-        (prev.profileCode && !masterData.frameProfiles.find(p => p.code === prev.profileCode)) ||
-        (prev.handleProfileCode && !masterData.handleProfiles.find(p => p.code === prev.handleProfileCode));
+      const frameInvalid = prev.profileCode && !masterData.frameProfiles.find(p => p.code === prev.profileCode);
+      const handleInvalid = prev.handleProfileCode && !masterData.handleProfiles.find(p => p.code === prev.handleProfileCode);
+      const connectorInvalid = prev.connectorCode && !masterData.connectorTypes.find(c => c.code === prev.connectorCode);
+      const glassInvalid = prev.glassTypeCode && !masterData.glassTypes.find(g => g.code === prev.glassTypeCode);
       
-      if (needsUpdate) {
+      if (frameInvalid || handleInvalid || connectorInvalid || glassInvalid) {
         return {
           ...prev,
-          profileCode: masterData.frameProfiles[0]?.code || prev.profileCode,
-          handleProfileCode: masterData.handleProfiles[0]?.code || prev.handleProfileCode,
+          profileCode: frameInvalid ? (masterData.frameProfiles[0]?.code || prev.profileCode) : prev.profileCode,
+          frameProfileCode: frameInvalid ? (masterData.frameProfiles[0]?.code || prev.frameProfileCode) : prev.frameProfileCode,
+          handleProfileCode: handleInvalid ? (masterData.handleProfiles[0]?.code || prev.handleProfileCode) : prev.handleProfileCode,
+          connectorCode: connectorInvalid ? (masterData.connectorTypes[0]?.code || prev.connectorCode) : prev.connectorCode,
+          glassTypeCode: glassInvalid ? (masterData.glassTypes[0]?.code || prev.glassTypeCode) : prev.glassTypeCode,
         };
       }
       return prev;
+    });
+  }, [masterData]);
+
+  // Also sync existing quotation doors when masterData changes (e.g., Firestore load replaces codes)
+  useEffect(() => {
+    setQuotation(prev => {
+      const updatedDoors = prev.doors.map(door => {
+        let updated = { ...door };
+        let changed = false;
+        if (door.connectorCode && !masterData.connectorTypes.find(c => c.code === door.connectorCode)) {
+          updated.connectorCode = masterData.connectorTypes[0]?.code || door.connectorCode;
+          changed = true;
+        }
+        if (door.glassTypeCode && !masterData.glassTypes.find(g => g.code === door.glassTypeCode)) {
+          updated.glassTypeCode = masterData.glassTypes[0]?.code || door.glassTypeCode;
+          changed = true;
+        }
+        const profileCode = door.profileCode || door.frameProfileCode;
+        if (profileCode && !masterData.frameProfiles.find(f => f.code === profileCode)) {
+          const newCode = masterData.frameProfiles[0]?.code || profileCode;
+          updated.profileCode = newCode;
+          updated.frameProfileCode = newCode;
+          changed = true;
+        }
+        return changed ? updated : door;
+      });
+      const anyChanged = updatedDoors.some((d, i) => d !== prev.doors[i]);
+      return anyChanged ? { ...prev, doors: updatedDoors } : prev;
     });
   }, [masterData]);
 
@@ -387,6 +422,13 @@ export default function Home() {
     return { handles, glassTypes, connectors };
   }, [currentDoor.frameProfileCode, masterData]);
 
+  // Auto-set connectorCode if empty but connectors are available
+  useEffect(() => {
+    if (!currentDoor.connectorCode && filteredOptions.connectors.length > 0) {
+      setCurrentDoor(prev => ({ ...prev, connectorCode: filteredOptions.connectors[0].code }));
+    }
+  }, [currentDoor.connectorCode, filteredOptions.connectors]);
+
   // Auto-save to localStorage
   useEffect(() => {
     if (quotation.customerName && quotation.doors.length > 0) {
@@ -459,11 +501,60 @@ export default function Home() {
     setWidthError('');
     setHeightError('');
 
-    setQuotation(prev => ({
-      ...prev,
-      doors: [...prev.doors, currentDoor],
-    }));
+    if (editingDoorId) {
+      // Update existing door in-place
+      setQuotation(prev => ({
+        ...prev,
+        doors: prev.doors.map(d => d.id === editingDoorId ? { ...currentDoor, id: editingDoorId } : d),
+      }));
+      setEditingDoorId(null);
+    } else {
+      // Add new door
+      setQuotation(prev => ({
+        ...prev,
+        doors: [...prev.doors, currentDoor],
+      }));
+    }
 
+    // Reset form
+    setCurrentDoor({
+      id: uuidv4(),
+      doorName: '',
+      doorType: 'openable',
+      measurementUnit: 'mm',
+      height: 0,
+      width: 0,
+      quantity: 1,
+      handlePosition: 'right',
+      handleOffset: 500,
+      hingePosition: 'left',
+      hingeCode: 'H-001',
+      hingeQuantity: 2,
+      carcassThickness: 18,
+      frameProfileCode: masterData.frameProfiles[0].code,
+      profileCode: masterData.frameProfiles[0].code,
+      hasHandle: true,
+      openingDirection: 'right',
+      hasDividers: false,
+      glassTypeCode: masterData.glassTypes[0].code,
+      connectorCode: masterData.connectorTypes[0]?.code,
+      connectorQuantity: 4,
+      liftAvailable: true,
+    });
+  };
+
+  const handleEditDoor = (doorId: string) => {
+    const door = quotation.doors.find(d => d.id === doorId);
+    if (door) {
+      setCurrentDoor({ ...door });
+      setEditingDoorId(doorId);
+      // Scroll to the door configuration form
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleCancelEditDoor = () => {
+    setEditingDoorId(null);
     setCurrentDoor({
       id: uuidv4(),
       doorName: '',
@@ -491,6 +582,10 @@ export default function Home() {
   };
 
   const handleRemoveDoor = (doorId: string) => {
+    // If we're editing this door, cancel the edit
+    if (editingDoorId === doorId) {
+      handleCancelEditDoor();
+    }
     setQuotation(prev => ({
       ...prev,
       doors: prev.doors.filter(d => d.id !== doorId),
@@ -532,7 +627,7 @@ export default function Home() {
       alert('Please add customer details and at least one door');
       return;
     }
-    await generateQuotationPDF(quotation, doorCalculations, costSummary);
+    await generateQuotationPDF(quotation, doorCalculations, costSummary, masterData);
   };
 
   const handleExportCuttingSchema = async () => {
@@ -540,7 +635,7 @@ export default function Home() {
       alert('Please add customer details and at least one door');
       return;
     }
-    await generateCuttingSchemaPDF(quotation, doorCalculations, costSummary);
+    await generateCuttingSchemaPDF(quotation, doorCalculations, costSummary, masterData);
   };
 
   const handleExportExcel = () => {
@@ -548,7 +643,7 @@ export default function Home() {
       alert('Please add customer details and at least one door');
       return;
     }
-    exportToExcel(quotation, doorCalculations, costSummary);
+    exportToExcel(quotation, doorCalculations, costSummary, masterData);
   };
 
   const handleExportText = () => {
@@ -556,7 +651,7 @@ export default function Home() {
       alert('Please add customer details and at least one door');
       return;
     }
-    exportToText(quotation, doorCalculations, costSummary);
+    exportToText(quotation, doorCalculations, costSummary, masterData);
   };
 
   // Master data management functions
@@ -953,7 +1048,7 @@ export default function Home() {
 
               {/* Tabs */}
               <div className="flex space-x-1 mb-6 overflow-x-auto border-b border-gray-200 -mx-4 sm:mx-0 px-4 sm:px-0 scrollbar-thin scrollbar-thumb-gray-300">
-                {(['frames', 'handles', 'glass', 'connectors', 'clients', 'jobs', 'sliding-bundles', 'company-info', 'defaults', 'validation', 'hinges'] as const).map(tab => (
+                {(['frames', 'handles', 'glass', 'connectors', 'products', 'clients', 'jobs', 'sliding-bundles', 'company-info', 'defaults', 'validation', 'hinges'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -967,6 +1062,7 @@ export default function Home() {
                     {tab === 'handles' && 'Handle Profiles'}
                     {tab === 'glass' && 'Glass Types'}
                     {tab === 'connectors' && 'Connectors'}
+                    {tab === 'products' && 'Hardware Products'}
                     {tab === 'clients' && 'Clients'}
                     {tab === 'jobs' && 'Jobs'}
                     {tab === 'sliding-bundles' && 'Sliding Bundles'}
@@ -2902,6 +2998,218 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Hardware Products Tab */}
+                {activeTab === 'products' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Hardware Products</h3>
+                        <p className="text-sm text-gray-600">Manage gaskets, locks, hinge types, divider profiles & connectors</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const typeChoice = prompt('Product type:\n1 = Gasket\n2 = Lock\n3 = Hinge\n4 = Divider Profile\n5 = Divider Connector');
+                          const typeMap: Record<string, string> = { '1': 'gasket', '2': 'lock', '3': 'hinge', '4': 'divider-profile', '5': 'divider-connector' };
+                          const pType = typeMap[typeChoice || ''] as any;
+                          if (!pType) return;
+                          const prefix = { 'gasket': 'GK', 'lock': 'LK', 'hinge': 'HG', 'divider-profile': 'DP', 'divider-connector': 'DC' }[pType as string] || 'PR';
+                          const existing = (masterData.products || []).filter(p => p.productType === pType);
+                          const newProduct: Product = {
+                            code: `${prefix}${String(existing.length + 1).padStart(3, '0')}`,
+                            name: `New ${pType.replace('-', ' ')}`,
+                            productType: pType,
+                            compatibleDoorTypes: ['openable', 'sliding'],
+                            costPrice: 0,
+                            sellingPrice: 0,
+                            pricePerUnit: pType === 'lock' || pType === 'hinge' || pType === 'divider-connector' ? 0 : undefined,
+                            pricePerMm: pType === 'gasket' || pType === 'divider-profile' ? 0 : undefined,
+                          };
+                          setMasterData(prev => ({
+                            ...prev,
+                            products: [...(prev.products || []), newProduct],
+                          }));
+                        }}
+                        className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-semibold text-sm"
+                      >
+                        + Add Product
+                      </button>
+                    </div>
+
+                    {/* Product type sections */}
+                    {(['gasket', 'lock', 'hinge', 'divider-profile', 'divider-connector'] as const).map(pType => {
+                      const products = (masterData.products || []).filter(p => p.productType === pType);
+                      const typeLabel = { 'gasket': '🔧 Gaskets', 'lock': '🔒 Locks', 'hinge': '📌 Hinge Types', 'divider-profile': '📏 Divider Profiles', 'divider-connector': '🔗 Divider Connectors' }[pType];
+                      const pricingField = (pType === 'gasket' || pType === 'divider-profile') ? 'pricePerMm' : 'pricePerUnit';
+                      const pricingLabel = pricingField === 'pricePerMm' ? 'Price per mm (₹)' : 'Price per Unit (₹)';
+
+                      return (
+                        <div key={pType} className="mb-6">
+                          <h4 className="text-md font-semibold text-gray-700 mb-3 border-b pb-2">{typeLabel} ({products.length})</h4>
+                          {products.length === 0 ? (
+                            <p className="text-sm text-gray-500 italic">No {pType.replace('-', ' ')}s added yet.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {products.map((product, idx) => {
+                                const globalIdx = (masterData.products || []).findIndex(p => p.code === product.code && p.productType === product.productType);
+                                return (
+                                  <div key={product.code} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <span className="text-sm font-semibold text-gray-600">{product.code}</span>
+                                      <button
+                                        onClick={() => {
+                                          if (confirm(`Delete ${product.name}?`)) {
+                                            setMasterData(prev => ({
+                                              ...prev,
+                                              products: (prev.products || []).filter((_, i) => i !== globalIdx),
+                                            }));
+                                          }
+                                        }}
+                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
+                                        <input
+                                          type="text"
+                                          value={product.code}
+                                          onChange={e => {
+                                            const updated = [...(masterData.products || [])];
+                                            updated[globalIdx] = { ...product, code: e.target.value };
+                                            setMasterData(prev => ({ ...prev, products: updated }));
+                                          }}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+                                        <input
+                                          type="text"
+                                          value={product.name}
+                                          onChange={e => {
+                                            const updated = [...(masterData.products || [])];
+                                            updated[globalIdx] = { ...product, name: e.target.value };
+                                            setMasterData(prev => ({ ...prev, products: updated }));
+                                          }}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">{pricingLabel}</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={product[pricingField] ?? product.sellingPrice ?? 0}
+                                          onChange={e => {
+                                            const val = parseFloat(e.target.value) || 0;
+                                            const updated = [...(masterData.products || [])];
+                                            updated[globalIdx] = { ...product, [pricingField]: val, sellingPrice: val };
+                                            setMasterData(prev => ({ ...prev, products: updated }));
+                                          }}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Finish</label>
+                                        <input
+                                          type="text"
+                                          value={product.finish || ''}
+                                          onChange={e => {
+                                            const updated = [...(masterData.products || [])];
+                                            updated[globalIdx] = { ...product, finish: e.target.value };
+                                            setMasterData(prev => ({ ...prev, products: updated }));
+                                          }}
+                                          placeholder="e.g., Stainless Steel"
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                    </div>
+                                    {/* Extra fields for specific types */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Cost Price (₹)</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={product.costPrice ?? 0}
+                                          onChange={e => {
+                                            const updated = [...(masterData.products || [])];
+                                            updated[globalIdx] = { ...product, costPrice: parseFloat(e.target.value) || 0 };
+                                            setMasterData(prev => ({ ...prev, products: updated }));
+                                          }}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                      {(pType === 'gasket' || pType === 'divider-profile') && (
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-700 mb-1">Thickness (mm)</label>
+                                          <input
+                                            type="number"
+                                            value={product.thickness ?? ''}
+                                            onChange={e => {
+                                              const updated = [...(masterData.products || [])];
+                                              updated[globalIdx] = { ...product, thickness: parseFloat(e.target.value) || 0 };
+                                              setMasterData(prev => ({ ...prev, products: updated }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                          />
+                                        </div>
+                                      )}
+                                      {(pType === 'divider-profile') && (
+                                        <div>
+                                          <label className="block text-xs font-medium text-gray-700 mb-1">Width (mm)</label>
+                                          <input
+                                            type="number"
+                                            value={product.width ?? ''}
+                                            onChange={e => {
+                                              const updated = [...(masterData.products || [])];
+                                              updated[globalIdx] = { ...product, width: parseFloat(e.target.value) || 0 };
+                                              setMasterData(prev => ({ ...prev, products: updated }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                          />
+                                        </div>
+                                      )}
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-1">Compatible Door Types</label>
+                                        <div className="flex flex-wrap gap-2 mt-1">
+                                          {(['openable', 'sliding', 'air-hinge', 'pin-hinge'] as const).map(dt => (
+                                            <label key={dt} className="flex items-center text-xs gap-1">
+                                              <input
+                                                type="checkbox"
+                                                checked={product.compatibleDoorTypes?.includes(dt) || false}
+                                                onChange={e => {
+                                                  const updated = [...(masterData.products || [])];
+                                                  const types = product.compatibleDoorTypes || [];
+                                                  updated[globalIdx] = {
+                                                    ...product,
+                                                    compatibleDoorTypes: e.target.checked
+                                                      ? [...types, dt]
+                                                      : types.filter(t => t !== dt),
+                                                  };
+                                                  setMasterData(prev => ({ ...prev, products: updated }));
+                                                }}
+                                                className="rounded"
+                                              />
+                                              {dt}
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Hinge Rules Tab */}
                 {activeTab === 'hinges' && (
                   <div>
@@ -3632,13 +3940,23 @@ export default function Home() {
                       </label>
                       <input
                         type="number"
-                        min="2"
-                        value={currentDoor.hingeQuantity || 2}
-                        onChange={e => setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(2, e.target.value === '' ? 2 : parseInt(e.target.value)) }))}
+                        min="0"
+                        value={currentDoor.hingeQuantity ?? 2}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                          setCurrentDoor(prev => ({ ...prev, hingeQuantity: Math.max(0, val) }));
+                        }}
                         onWheel={(e) => e.currentTarget.blur()}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 ${
+                          (currentDoor.hingeQuantity !== undefined && currentDoor.hingeQuantity < 2)
+                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                            : 'border-gray-300 focus:ring-black focus:border-black'
+                        }`}
                         placeholder="2"
                       />
+                      {currentDoor.hingeQuantity !== undefined && currentDoor.hingeQuantity < 2 && (
+                        <p className="text-red-500 text-xs mt-1">⚠ Minimum 2 hinges recommended for safety</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -3659,7 +3977,7 @@ export default function Home() {
                     )}
                   </label>
                   <select
-                    value={currentDoor.connectorCode || ''}
+                    value={currentDoor.connectorCode || filteredOptions.connectors[0]?.code || ''}
                     onChange={e => setCurrentDoor(prev => ({ ...prev, connectorCode: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
                   >
@@ -3677,7 +3995,7 @@ export default function Home() {
                   <input
                     type="number"
                     min="0"
-                    value={currentDoor.connectorQuantity || ''}
+                    value={currentDoor.connectorQuantity ?? 4}
                     onChange={e => setCurrentDoor(prev => ({ ...prev, connectorQuantity: e.target.value === '' ? 0 : parseInt(e.target.value) }))}
                     onWheel={(e) => e.currentTarget.blur()}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
@@ -3704,7 +4022,7 @@ export default function Home() {
                     <option value="">-- None --</option>
                     {(masterData.products || []).filter(p => p.productType === 'gasket').map(product => (
                       <option key={product.code} value={product.code}>
-                        {product.code} - {product.name}
+                        {product.code} - {product.name} {product.pricePerMm ? `(₹${product.pricePerMm}/mm)` : product.sellingPrice ? `(₹${product.sellingPrice}/unit)` : ''}
                       </option>
                     ))}
                   </select>
@@ -3721,7 +4039,7 @@ export default function Home() {
                     <option value="">-- None --</option>
                     {(masterData.products || []).filter(p => p.productType === 'lock').map(product => (
                       <option key={product.code} value={product.code}>
-                        {product.code} - {product.name}
+                        {product.code} - {product.name} {product.pricePerUnit || product.sellingPrice ? `(₹${product.pricePerUnit || product.sellingPrice}/unit)` : ''}
                       </option>
                     ))}
                   </select>
@@ -3978,12 +4296,36 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Add Door Button */}
+            {/* Add/Update Door Button */}
+            {editingDoorId && (
+              <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-3 mb-2 flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="text-amber-600 text-lg mr-2">✏️</span>
+                  <span className="text-sm font-semibold text-amber-800">
+                    Editing: {quotation.doors.find(d => d.id === editingDoorId)?.doorName || 'Door'}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCancelEditDoor}
+                  className="text-sm font-medium text-gray-600 hover:text-black px-3 py-1 rounded border border-gray-300 hover:border-black transition-colors"
+                >
+                  Cancel Edit
+                </button>
+              </div>
+            )}
             <button
               onClick={handleAddDoor}
-              className="w-full bg-black hover:bg-gray-800 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-lg transition-colors flex items-center justify-center text-base sm:text-lg shadow-lg"
+              className={`w-full font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-lg transition-colors flex items-center justify-center text-base sm:text-lg shadow-lg ${
+                editingDoorId
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-black hover:bg-gray-800 text-white'
+              }`}
             >
-              <span className="mr-2 text-lg sm:text-xl">+</span> Add Door to Quotation
+              {editingDoorId ? (
+                <><span className="mr-2 text-lg sm:text-xl">✓</span> Update Door</>
+              ) : (
+                <><span className="mr-2 text-lg sm:text-xl">+</span> Add Door to Quotation</>
+              )}
             </button>
 
               {/* Comprehensive Auto-Calculated Preview */}
@@ -4124,7 +4466,12 @@ export default function Home() {
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Connectors:</span>
+                          <span className="text-gray-600">Connectors ({currentCalc.connectorsRequired} × ₹{(() => {
+                            const cc = (currentDoor.connectorCode || '').trim();
+                            let ct = masterData.connectorTypes.find(c => c.code === cc);
+                            if (!ct && masterData.connectorTypes.length > 0) ct = masterData.connectorTypes[0];
+                            return ct?.pricePerUnit || 0;
+                          })()}/unit):</span>
                           <span className="font-bold text-gray-900 ml-1">
                             {formatCurrency((() => {
                               const calc = currentCalc;
@@ -4222,7 +4569,7 @@ export default function Home() {
               {currentDoor.width > 0 && currentDoor.height > 0 ? (
                 <div className="flex flex-col items-center">
                   {/* Premium Elevation Diagram - CAD Style */}
-                  <div className="mb-2" dangerouslySetInnerHTML={{ __html: generatePremiumElevationSVG(ensureHingePositions(currentDoor)) }} />
+                  <div className="mb-2" dangerouslySetInnerHTML={{ __html: generatePremiumElevationSVG(ensureHingePositions(currentDoor), masterData) }} />
                   <p className="text-sm font-medium text-gray-700">Technical Elevation View</p>
                 </div>
               ) : (
@@ -4243,16 +4590,36 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {quotation.doors.map((door, index) => {
                   const calc = doorCalculations[index];
+                  const isBeingEdited = editingDoorId === door.id;
                   return (
-                    <div key={door.id} className="bg-white rounded-lg p-4 border border-gray-300 hover:border-black transition-colors">
+                    <div key={door.id} className={`bg-white rounded-lg p-4 border-2 transition-colors ${
+                      isBeingEdited
+                        ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
+                        : 'border-gray-300 hover:border-black'
+                    }`}>
+                      {isBeingEdited && (
+                        <div className="text-xs font-semibold text-amber-600 mb-2 flex items-center">
+                          <span className="mr-1">✏️</span> Currently Editing
+                        </div>
+                      )}
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-semibold text-black">{door.doorName}</h4>
-                        <button
-                          onClick={() => handleRemoveDoor(door.id)}
-                          className="text-gray-400 hover:text-black font-semibold text-lg"
-                        >
-                          ✕
-                        </button>
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => handleEditDoor(door.id)}
+                            className="text-gray-400 hover:text-blue-600 font-medium text-sm px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors"
+                            title="Edit door"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleRemoveDoor(door.id)}
+                            className="text-gray-400 hover:text-red-600 font-semibold text-lg px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
+                            title="Remove door"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
                       {door.referenceImage && (
                         <img 

@@ -1,19 +1,22 @@
 import React from 'react';
-import { DoorConfiguration, MeasurementUnit } from '../types';
+import { DoorConfiguration, MeasurementUnit, MasterData } from '../types';
 import { convertToMm } from './calculations';
-import { masterData } from '../data/masterData';
+import { masterData as defaultMasterData } from '../data/masterData';
 
 interface DiagramProps {
   door: DoorConfiguration;
+  masterData?: MasterData;
   width?: number;
   height?: number;
 }
 
 export const DoorDiagram: React.FC<DiagramProps> = ({ 
   door, 
+  masterData: md,
   width = 400, 
   height = 600 
 }) => {
+  const masterData = md || defaultMasterData;
   const doorHeightMm = convertToMm(door.height, door.measurementUnit);
   const doorWidthMm = convertToMm(door.width, door.measurementUnit);
   
@@ -475,7 +478,8 @@ export const DoorDiagram: React.FC<DiagramProps> = ({
 };
 
 // Function to convert React component to SVG string for PDF generation
-export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: number): string => {
+export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: number, md?: MasterData): string => {
+  const masterData = md || defaultMasterData;
   const doorHeightMm = convertToMm(door.height, door.measurementUnit);
   const doorWidthMm = convertToMm(door.width, door.measurementUnit);
   
@@ -726,7 +730,8 @@ export const generateDoorDiagramSVG = (door: DoorConfiguration, glassArea?: numb
 };
 
 // PREMIUM ELEVATION DIAGRAM - Professional CAD/AutoCAD style technical drawing
-export const generatePremiumElevationSVG = (door: DoorConfiguration): string => {
+export const generatePremiumElevationSVG = (door: DoorConfiguration, md?: MasterData): string => {
+  const masterData = md || defaultMasterData;
   const doorHeightMm = convertToMm(door.height, door.measurementUnit);
   const doorWidthMm = convertToMm(door.width, door.measurementUnit);
   
@@ -740,7 +745,7 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
   const hasGlass = door.glassTypeCode && door.glassTypeCode !== '';
   
   const width = 700;
-  const height = 850;
+  const height = 950;
   const padding = 120;
   const scale = Math.min(
     (width - 2 * padding) / doorWidthMm,
@@ -1019,6 +1024,69 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
     }
   });
   
+  // Build dynamic technical specification rows
+  const specRows: Array<[string, string, string]> = [
+    ['Door Type', door.doorType.toUpperCase(), '-'],
+    ['Frame Profile', frameProfile?.name || 'N/A', frameProfile?.code || 'N/A'],
+  ];
+  if (door.profileColor) {
+    specRows.push(['Frame Color', door.profileColor, '-']);
+  }
+  specRows.push(['Glass', glassType?.name || 'N/A', glassType?.code || 'N/A']);
+  specRows.push(['Handle', handleProfile?.name || 'None', handleProfile?.code || 'N/A']);
+  if (door.handleColor) {
+    specRows.push(['Handle Color', door.handleColor, '-']);
+  }
+  if (door.doorType !== 'sliding') {
+    specRows.push(['Hinge Type', hingeProduct?.name || 'Standard', hingeProduct?.code || door.hingeCode || 'N/A']);
+    specRows.push(['Hinge Position', hingeSide.toUpperCase() + ' | Count: ' + hingePositions.length, '-']);
+  }
+  // Connector
+  const connectorType = masterData.connectorTypes?.find(c => c.code === door.connectorCode);
+  if (connectorType) {
+    specRows.push(['Connector', connectorType.name, connectorType.code]);
+  }
+  // Gasket
+  if (door.gasketCode) {
+    const gasketProduct = masterData.products?.find(p => p.code === door.gasketCode && p.productType === 'gasket');
+    specRows.push(['Gasket', gasketProduct?.name || 'N/A', door.gasketCode]);
+  }
+  // Lock
+  if (door.lockCode) {
+    const lockProduct = masterData.products?.find(p => p.code === door.lockCode && p.productType === 'lock');
+    specRows.push(['Lock', lockProduct?.name || 'N/A', door.lockCode]);
+  }
+  // Sliding bundle
+  if (door.doorType === 'sliding' && slidingBundle) {
+    specRows.push(['Sliding System', slidingBundle.name, slidingBundle.code]);
+  }
+  specRows.push(['Quantity', door.quantity + ' Unit' + (door.quantity > 1 ? 's' : ''), '-']);
+
+  const rowHeight = 13;
+  const specHeaderHeight = 28;
+  const specGridHeaderHeight = 18;
+  const specBoxHeight = specHeaderHeight + specGridHeaderHeight + specRows.length * rowHeight + 10;
+  const specBoxY = height - specBoxHeight - 18;
+
+  let specRowsHTML = '';
+  specRows.forEach((row, i) => {
+    const rowY = specBoxY + specHeaderHeight + specGridHeaderHeight + (i * rowHeight) + 10;
+    specRowsHTML += '<text x="45" y="' + rowY + '" font-size="9" font-family="Arial, sans-serif" fill="#333">' + row[0] + ':</text>';
+    specRowsHTML += '<text x="180" y="' + rowY + '" font-size="9" font-family="Arial, sans-serif" fill="#666">' + row[1] + '</text>';
+    specRowsHTML += '<text x="420" y="' + rowY + '" font-size="9" font-family="Arial, sans-serif" fill="#666">' + row[2] + '</text>';
+  });
+
+  const techSpecsHTML = '<g>'
+    + '<rect x="30" y="' + specBoxY + '" width="' + (width - 60) + '" height="' + specBoxHeight + '" fill="#F5F5F5" stroke="#000" stroke-width="2"/>'
+    + '<rect x="30" y="' + specBoxY + '" width="' + (width - 60) + '" height="' + specHeaderHeight + '" fill="#000"/>'
+    + '<text x="' + (width / 2) + '" y="' + (specBoxY + 19) + '" text-anchor="middle" font-size="13" font-family="Arial, sans-serif" font-weight="bold" fill="#FFF">TECHNICAL SPECIFICATIONS</text>'
+    + '<text x="45" y="' + (specBoxY + specHeaderHeight + 14) + '" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">ITEM</text>'
+    + '<text x="180" y="' + (specBoxY + specHeaderHeight + 14) + '" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">SPECIFICATION</text>'
+    + '<text x="420" y="' + (specBoxY + specHeaderHeight + 14) + '" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">CODE</text>'
+    + '<line x1="40" y1="' + (specBoxY + specHeaderHeight + specGridHeaderHeight) + '" x2="' + (width - 40) + '" y2="' + (specBoxY + specHeaderHeight + specGridHeaderHeight) + '" stroke="#000" stroke-width="1"/>'
+    + specRowsHTML
+    + '</g>';
+
   return `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -1150,58 +1218,7 @@ export const generatePremiumElevationSVG = (door: DoorConfiguration): string => 
       <!-- Left side handle clearances removed as requested -->
       
       <!-- Technical Notes Box -->
-      <g>
-        <rect x="30" y="${height - 170}" width="${width - 60}" height="150" 
-              fill="#F5F5F5" stroke="#000" stroke-width="2"/>
-        <rect x="30" y="${height - 170}" width="${width - 60}" height="28" 
-              fill="#000"/>
-        <text x="${width / 2}" y="${height - 149}" text-anchor="middle" 
-              font-size="13" font-family="Arial, sans-serif" font-weight="bold" fill="#FFF">
-          TECHNICAL SPECIFICATIONS
-        </text>
-        
-        <!-- Specification grid -->
-        <text x="45" y="${height - 125}" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
-          ITEM
-        </text>
-        <text x="180" y="${height - 125}" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
-          SPECIFICATION
-        </text>
-        <text x="420" y="${height - 125}" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000">
-          CODE
-        </text>
-        
-        <line x1="40" y1="${height - 118}" x2="${width - 40}" y2="${height - 118}" stroke="#000" stroke-width="1"/>
-        
-        <!-- Rows -->
-        <text x="45" y="${height - 103}" font-size="9" font-family="Arial, sans-serif" fill="#333">Door Type:</text>
-        <text x="180" y="${height - 103}" font-size="9" font-family="Arial, sans-serif" fill="#666">${door.doorType.toUpperCase()}</text>
-        <text x="420" y="${height - 103}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
-        
-        <text x="45" y="${height - 88}" font-size="9" font-family="Arial, sans-serif" fill="#333">Frame Profile:</text>
-        <text x="180" y="${height - 88}" font-size="9" font-family="Arial, sans-serif" fill="#666">${frameProfile?.name || 'N/A'}</text>
-        <text x="420" y="${height - 88}" font-size="9" font-family="Arial, sans-serif" fill="#666">${frameProfile?.code || 'N/A'}</text>
-        
-        <text x="45" y="${height - 73}" font-size="9" font-family="Arial, sans-serif" fill="#333">Handle:</text>
-        <text x="180" y="${height - 73}" font-size="9" font-family="Arial, sans-serif" fill="#666">${handleProfile?.name || 'None'}</text>
-        <text x="420" y="${height - 73}" font-size="9" font-family="Arial, sans-serif" fill="#666">${handleProfile?.code || 'N/A'}</text>
-        
-        ${door.doorType !== 'sliding' ? `
-        <text x="45" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#333">Hinge:</text>
-        <text x="180" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeProduct?.name || 'Standard'}</text>
-        <text x="420" y="${height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeProduct?.code || door.hingeCode || 'N/A'}</text>
-        ` : ''}
-        
-        <text x="45" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#333">Quantity:</text>
-        <text x="180" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">${door.quantity} Unit${door.quantity > 1 ? 's' : ''}</text>
-        <text x="420" y="${door.doorType !== 'sliding' ? height - 43 : height - 58}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
-        
-        ${door.doorType !== 'sliding' ? `
-        <text x="45" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#333">Hinge Position:</text>
-        <text x="180" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#666">${hingeSide.toUpperCase()} | Count: ${hingePositions.length}</text>
-        <text x="420" y="${height - 28}" font-size="9" font-family="Arial, sans-serif" fill="#666">-</text>
-        ` : ''}
-      </g>
+      ${techSpecsHTML}
       
       <!-- Footer -->
       <text x="${width / 2}" y="${height - 8}" text-anchor="middle" 

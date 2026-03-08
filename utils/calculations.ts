@@ -358,7 +358,10 @@ export const calculateDoorCosts = (
   // AUTO-CALCULATE: Hinge count and positions (for openable/pin-hinge)
   const hingeConfig = calculateHingeConfig(heightMm, door.doorType);
   const hingeCount = door.hingeQuantity || hingeConfig.hingeCount;
-  const hingePositions = door.hingePositionMm || hingeConfig.hingePositions;
+  // Use door's positions if they match the count, otherwise recalculate
+  const hingePositions = (door.hingePositionMm && door.hingePositionMm.length === hingeCount)
+    ? door.hingePositionMm
+    : hingeConfig.hingePositions;
   
   // Calculate hinge cost
   let hingeCost = 0;

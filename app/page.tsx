@@ -451,8 +451,11 @@ export default function Home() {
       const calculatedHingeQty = calculateHingeQuantityByHeight(heightMm);
       // Calculate positions
       const positions = calculateHingePositions(heightMm, calculatedHingeQty);
+      // Update if quantity changed, positions changed, or positions count doesn't match quantity
+      const positionsMismatch = (currentDoor.hingePositionMm || []).length !== calculatedHingeQty;
       if (
         currentDoor.hingeQuantity !== calculatedHingeQty ||
+        positionsMismatch ||
         JSON.stringify(positions) !== JSON.stringify(currentDoor.hingePositionMm) ||
         currentDoor.hingePosition !== autoHingePosition
       ) {
